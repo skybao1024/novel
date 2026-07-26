@@ -1,0 +1,85 @@
+{
+  "$id": "https://novel.local/schemas/scene-summary.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Non-Canon navigation memory for one approved Scene revision.",
+  "properties": {
+    "chapter_id": {
+      "format": "uuid",
+      "title": "Chapter Id",
+      "type": "string"
+    },
+    "key_changes": {
+      "default": [],
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxItems": 32,
+      "title": "Key Changes",
+      "type": "array"
+    },
+    "main_entity_ids": {
+      "default": [],
+      "items": {
+        "format": "uuid",
+        "type": "string"
+      },
+      "maxItems": 32,
+      "title": "Main Entity Ids",
+      "type": "array"
+    },
+    "open_questions": {
+      "default": [],
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxItems": 32,
+      "title": "Open Questions",
+      "type": "array"
+    },
+    "scene_id": {
+      "format": "uuid",
+      "title": "Scene Id",
+      "type": "string"
+    },
+    "scene_number_in_chapter": {
+      "minimum": 1,
+      "title": "Scene Number In Chapter",
+      "type": "integer"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_document_id": {
+      "format": "uuid",
+      "title": "Source Document Id",
+      "type": "string"
+    },
+    "source_revision": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Source Revision",
+      "type": "string"
+    },
+    "summary": {
+      "minLength": 1,
+      "title": "Summary",
+      "type": "string"
+    }
+  },
+  "required": [
+    "scene_id",
+    "chapter_id",
+    "scene_number_in_chapter",
+    "source_document_id",
+    "source_revision",
+    "summary"
+  ],
+  "title": "SceneSummary",
+  "type": "object",
+  "x-schema-version": "1.0.0"
+}

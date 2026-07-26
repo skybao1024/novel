@@ -1,0 +1,47 @@
+{
+  "$id": "https://novel.local/schemas/chapter.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "An explicit, stable Chapter boundary over existing Scene IDs.",
+  "properties": {
+    "chapter_id": {
+      "format": "uuid",
+      "title": "Chapter Id",
+      "type": "string"
+    },
+    "chapter_number": {
+      "minimum": 1,
+      "title": "Chapter Number",
+      "type": "integer"
+    },
+    "scene_ids": {
+      "items": {
+        "format": "uuid",
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Scene Ids",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "title": {
+      "minLength": 1,
+      "title": "Title",
+      "type": "string"
+    }
+  },
+  "required": [
+    "chapter_id",
+    "chapter_number",
+    "title",
+    "scene_ids"
+  ],
+  "title": "Chapter",
+  "type": "object",
+  "x-schema-version": "1.0.0"
+}

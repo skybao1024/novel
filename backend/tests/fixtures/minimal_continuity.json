@@ -1,0 +1,399 @@
+{
+  "schema_version": "1.0.0",
+  "title": "银戒身份谜案",
+  "entities": [
+    {
+      "schema_version": "1.0.0",
+      "entity_id": "00000000-0000-4000-8000-000000000001",
+      "entity_type": "character",
+      "display_name": "沈砚",
+      "status": "active",
+      "created_revision": "rev-001",
+      "retired_revision": null
+    },
+    {
+      "schema_version": "1.0.0",
+      "entity_id": "00000000-0000-4000-8000-000000000002",
+      "entity_type": "character",
+      "display_name": "顾宁",
+      "status": "active",
+      "created_revision": "rev-001",
+      "retired_revision": null
+    },
+    {
+      "schema_version": "1.0.0",
+      "entity_id": "00000000-0000-4000-8000-000000000003",
+      "entity_type": "location",
+      "display_name": "北塔",
+      "status": "active",
+      "created_revision": "rev-001",
+      "retired_revision": null
+    }
+  ],
+  "source_refs": [
+    {
+      "schema_version": "1.0.0",
+      "source_ref_id": "30000000-0000-4000-8000-000000000001",
+      "document_id": "20000000-0000-4000-8000-000000000001",
+      "scene_id": "10000000-0000-4000-8000-000000000001",
+      "document_revision": "sha256:scene-001-rev-003",
+      "fragment_ordinal": 7,
+      "quote_hash": "ad4fecb8d00cf0b6544e288afabd844f956f5c0eecb0a83a2ee92e4370052443",
+      "excerpt": "雨声里，沈砚摘下旧银戒：我本名萧砚，是先王遗子。"
+    },
+    {
+      "schema_version": "1.0.0",
+      "source_ref_id": "30000000-0000-4000-8000-000000000002",
+      "document_id": "20000000-0000-4000-8000-000000000001",
+      "scene_id": "10000000-0000-4000-8000-000000000002",
+      "document_revision": "sha256:scene-002-rev-002",
+      "fragment_ordinal": 4,
+      "quote_hash": "860c976917a26dc03f5b1773cf11c63ce939c6c91d8a075f6a435f80487fdfda",
+      "excerpt": "顾宁摇头：沈砚只是走私客，不可能与王室有关。"
+    },
+    {
+      "schema_version": "1.0.0",
+      "source_ref_id": "30000000-0000-4000-8000-000000000003",
+      "document_id": "20000000-0000-4000-8000-000000000001",
+      "scene_id": "10000000-0000-4000-8000-000000000004",
+      "document_revision": "sha256:scene-004-rev-001",
+      "fragment_ordinal": 2,
+      "quote_hash": "c6b7b0514c7901c2cc3359b112585648460f2cddf020418a05dfd95ff91183dd",
+      "excerpt": "火灾发生在十年前，幼年的萧砚被管家从北塔暗道救走。"
+    },
+    {
+      "schema_version": "1.0.0",
+      "source_ref_id": "30000000-0000-4000-8000-000000000004",
+      "document_id": "20000000-0000-4000-8000-000000000001",
+      "scene_id": "10000000-0000-4000-8000-000000000003",
+      "document_revision": "sha256:scene-003-rev-005",
+      "fragment_ordinal": 9,
+      "quote_hash": "02b43894c69c9431cca77c62228fea0b7d2908b8664ab556c1b8d1eb1f4fa28d",
+      "excerpt": "顾宁终于认出银戒内侧的王室铭文，明白自己一直错了。"
+    }
+  ],
+  "events": [
+    {
+      "schema_version": "1.0.0",
+      "event_id": "60000000-0000-4000-8000-000000000001",
+      "event_type": "belief.mistaken_identity",
+      "story_time": {
+        "schema_version": "1.0.0",
+        "timeline_id": "main",
+        "kind": "ordinal",
+        "story_time_start": 20,
+        "story_time_end": null,
+        "time_anchor_event_id": null,
+        "relative_offset": null,
+        "display_time": "调查第二日"
+      },
+      "narrative_order": 2,
+      "participant_entity_ids": [
+        "00000000-0000-4000-8000-000000000001",
+        "00000000-0000-4000-8000-000000000002"
+      ],
+      "location_entity_ids": [
+        "00000000-0000-4000-8000-000000000003"
+      ],
+      "source_scene_id": "10000000-0000-4000-8000-000000000002",
+      "source_ref_ids": [
+        "30000000-0000-4000-8000-000000000002"
+      ],
+      "summary": "顾宁认定沈砚只是走私客。",
+      "canon_status": "approved"
+    },
+    {
+      "schema_version": "1.0.0",
+      "event_id": "60000000-0000-4000-8000-000000000002",
+      "event_type": "identity.revelation",
+      "story_time": {
+        "schema_version": "1.0.0",
+        "timeline_id": "main",
+        "kind": "ordinal",
+        "story_time_start": 30,
+        "story_time_end": null,
+        "time_anchor_event_id": null,
+        "relative_offset": null,
+        "display_time": "调查第三日"
+      },
+      "narrative_order": 3,
+      "participant_entity_ids": [
+        "00000000-0000-4000-8000-000000000001",
+        "00000000-0000-4000-8000-000000000002"
+      ],
+      "location_entity_ids": [
+        "00000000-0000-4000-8000-000000000003"
+      ],
+      "source_scene_id": "10000000-0000-4000-8000-000000000003",
+      "source_ref_ids": [
+        "30000000-0000-4000-8000-000000000004"
+      ],
+      "summary": "顾宁从银戒铭文确认沈砚是先王遗子。",
+      "canon_status": "approved"
+    },
+    {
+      "schema_version": "1.0.0",
+      "event_id": "60000000-0000-4000-8000-000000000003",
+      "event_type": "rescue.from_fire",
+      "story_time": {
+        "schema_version": "1.0.0",
+        "timeline_id": "main",
+        "kind": "ordinal",
+        "story_time_start": 10,
+        "story_time_end": null,
+        "time_anchor_event_id": null,
+        "relative_offset": null,
+        "display_time": "十年前"
+      },
+      "narrative_order": 4,
+      "participant_entity_ids": [
+        "00000000-0000-4000-8000-000000000001"
+      ],
+      "location_entity_ids": [
+        "00000000-0000-4000-8000-000000000003"
+      ],
+      "source_scene_id": "10000000-0000-4000-8000-000000000004",
+      "source_ref_ids": [
+        "30000000-0000-4000-8000-000000000003"
+      ],
+      "summary": "倒叙展示幼年萧砚从北塔火灾中获救。",
+      "canon_status": "approved"
+    }
+  ],
+  "event_edges": [
+    {
+      "schema_version": "1.0.0",
+      "event_edge_id": "70000000-0000-4000-8000-000000000001",
+      "source_event_id": "60000000-0000-4000-8000-000000000003",
+      "target_event_id": "60000000-0000-4000-8000-000000000002",
+      "edge_type": "enables",
+      "source_ref_id": "30000000-0000-4000-8000-000000000003"
+    },
+    {
+      "schema_version": "1.0.0",
+      "event_edge_id": "70000000-0000-4000-8000-000000000002",
+      "source_event_id": "60000000-0000-4000-8000-000000000002",
+      "target_event_id": "60000000-0000-4000-8000-000000000001",
+      "edge_type": "contradicts",
+      "source_ref_id": "30000000-0000-4000-8000-000000000004"
+    }
+  ],
+  "change_sets": [
+    {
+      "schema_version": "1.0.0",
+      "change_set_id": "80000000-0000-4000-8000-000000000001",
+      "base_revision": "canon-rev-000",
+      "source_scene_id": "10000000-0000-4000-8000-000000000002",
+      "approved_at": "2026-07-24T10:00:00+08:00",
+      "operations": [
+        {
+          "schema_version": "1.0.0",
+          "operation_id": "90000000-0000-4000-8000-000000000001",
+          "op": "assert",
+          "target_assertion_id": null,
+          "reason": "建立隐藏身份的客观事实。",
+          "proposition": {
+            "schema_version": "1.0.0",
+            "proposition_id": "40000000-0000-4000-8000-000000000001",
+            "subject_entity_id": "00000000-0000-4000-8000-000000000001",
+            "predicate": "identity.is",
+            "object_kind": "value",
+            "object_entity_id": null,
+            "object_value": "先王遗子",
+            "qualifiers_json": []
+          },
+          "assertion": {
+            "schema_version": "1.0.0",
+            "assertion_id": "50000000-0000-4000-8000-000000000001",
+            "proposition_id": "40000000-0000-4000-8000-000000000001",
+            "scope": "objective",
+            "holder_entity_id": null,
+            "stance": "true",
+            "certainty": 1.0,
+            "valid_from": {
+              "schema_version": "1.0.0",
+              "timeline_id": "main",
+              "kind": "ordinal",
+              "story_time_start": 1,
+              "story_time_end": null,
+              "time_anchor_event_id": null,
+              "relative_offset": null,
+              "display_time": "故事开始前"
+            },
+            "valid_to": null,
+            "source_ref_id": "30000000-0000-4000-8000-000000000001",
+            "change_set_id": "80000000-0000-4000-8000-000000000001"
+          }
+        },
+        {
+          "schema_version": "1.0.0",
+          "operation_id": "90000000-0000-4000-8000-000000000002",
+          "op": "assert",
+          "target_assertion_id": null,
+          "reason": "记录顾宁尚不相信真实身份。",
+          "proposition": null,
+          "assertion": {
+            "schema_version": "1.0.0",
+            "assertion_id": "50000000-0000-4000-8000-000000000002",
+            "proposition_id": "40000000-0000-4000-8000-000000000001",
+            "scope": "character",
+            "holder_entity_id": "00000000-0000-4000-8000-000000000002",
+            "stance": "disbelieved",
+            "certainty": 0.9,
+            "valid_from": {
+              "schema_version": "1.0.0",
+              "timeline_id": "main",
+              "kind": "ordinal",
+              "story_time_start": 20,
+              "story_time_end": null,
+              "time_anchor_event_id": null,
+              "relative_offset": null,
+              "display_time": "调查第二日"
+            },
+            "valid_to": null,
+            "source_ref_id": "30000000-0000-4000-8000-000000000002",
+            "change_set_id": "80000000-0000-4000-8000-000000000001"
+          }
+        },
+        {
+          "schema_version": "1.0.0",
+          "operation_id": "90000000-0000-4000-8000-000000000003",
+          "op": "assert",
+          "target_assertion_id": null,
+          "reason": "建立走私客身份命题的客观否定。",
+          "proposition": {
+            "schema_version": "1.0.0",
+            "proposition_id": "40000000-0000-4000-8000-000000000002",
+            "subject_entity_id": "00000000-0000-4000-8000-000000000001",
+            "predicate": "identity.is",
+            "object_kind": "value",
+            "object_entity_id": null,
+            "object_value": "走私客",
+            "qualifiers_json": []
+          },
+          "assertion": {
+            "schema_version": "1.0.0",
+            "assertion_id": "50000000-0000-4000-8000-000000000003",
+            "proposition_id": "40000000-0000-4000-8000-000000000002",
+            "scope": "objective",
+            "holder_entity_id": null,
+            "stance": "false",
+            "certainty": 1.0,
+            "valid_from": {
+              "schema_version": "1.0.0",
+              "timeline_id": "main",
+              "kind": "ordinal",
+              "story_time_start": 1,
+              "story_time_end": null,
+              "time_anchor_event_id": null,
+              "relative_offset": null,
+              "display_time": "故事开始前"
+            },
+            "valid_to": null,
+            "source_ref_id": "30000000-0000-4000-8000-000000000001",
+            "change_set_id": "80000000-0000-4000-8000-000000000001"
+          }
+        },
+        {
+          "schema_version": "1.0.0",
+          "operation_id": "90000000-0000-4000-8000-000000000004",
+          "op": "assert",
+          "target_assertion_id": null,
+          "reason": "记录顾宁对错误身份的确信。",
+          "proposition": null,
+          "assertion": {
+            "schema_version": "1.0.0",
+            "assertion_id": "50000000-0000-4000-8000-000000000004",
+            "proposition_id": "40000000-0000-4000-8000-000000000002",
+            "scope": "character",
+            "holder_entity_id": "00000000-0000-4000-8000-000000000002",
+            "stance": "true",
+            "certainty": 0.95,
+            "valid_from": {
+              "schema_version": "1.0.0",
+              "timeline_id": "main",
+              "kind": "ordinal",
+              "story_time_start": 20,
+              "story_time_end": null,
+              "time_anchor_event_id": null,
+              "relative_offset": null,
+              "display_time": "调查第二日"
+            },
+            "valid_to": null,
+            "source_ref_id": "30000000-0000-4000-8000-000000000002",
+            "change_set_id": "80000000-0000-4000-8000-000000000001"
+          }
+        }
+      ]
+    },
+    {
+      "schema_version": "1.0.0",
+      "change_set_id": "80000000-0000-4000-8000-000000000002",
+      "base_revision": "canon-rev-001",
+      "source_scene_id": "10000000-0000-4000-8000-000000000003",
+      "approved_at": "2026-07-24T10:30:00+08:00",
+      "operations": [
+        {
+          "schema_version": "1.0.0",
+          "operation_id": "90000000-0000-4000-8000-000000000005",
+          "op": "supersede",
+          "target_assertion_id": "50000000-0000-4000-8000-000000000004",
+          "reason": "真相揭示后，以新记录替代顾宁的错误信念。",
+          "proposition": null,
+          "assertion": {
+            "schema_version": "1.0.0",
+            "assertion_id": "50000000-0000-4000-8000-000000000005",
+            "proposition_id": "40000000-0000-4000-8000-000000000002",
+            "scope": "character",
+            "holder_entity_id": "00000000-0000-4000-8000-000000000002",
+            "stance": "false",
+            "certainty": 1.0,
+            "valid_from": {
+              "schema_version": "1.0.0",
+              "timeline_id": "main",
+              "kind": "ordinal",
+              "story_time_start": 30,
+              "story_time_end": null,
+              "time_anchor_event_id": null,
+              "relative_offset": null,
+              "display_time": "调查第三日"
+            },
+            "valid_to": null,
+            "source_ref_id": "30000000-0000-4000-8000-000000000004",
+            "change_set_id": "80000000-0000-4000-8000-000000000002"
+          }
+        },
+        {
+          "schema_version": "1.0.0",
+          "operation_id": "90000000-0000-4000-8000-000000000006",
+          "op": "supersede",
+          "target_assertion_id": "50000000-0000-4000-8000-000000000002",
+          "reason": "顾宁获得隐藏身份真相。",
+          "proposition": null,
+          "assertion": {
+            "schema_version": "1.0.0",
+            "assertion_id": "50000000-0000-4000-8000-000000000006",
+            "proposition_id": "40000000-0000-4000-8000-000000000001",
+            "scope": "character",
+            "holder_entity_id": "00000000-0000-4000-8000-000000000002",
+            "stance": "true",
+            "certainty": 1.0,
+            "valid_from": {
+              "schema_version": "1.0.0",
+              "timeline_id": "main",
+              "kind": "ordinal",
+              "story_time_start": 30,
+              "story_time_end": null,
+              "time_anchor_event_id": null,
+              "relative_offset": null,
+              "display_time": "调查第三日"
+            },
+            "valid_to": null,
+            "source_ref_id": "30000000-0000-4000-8000-000000000004",
+            "change_set_id": "80000000-0000-4000-8000-000000000002"
+          }
+        }
+      ]
+    }
+  ]
+}

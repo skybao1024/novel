@@ -1,0 +1,4 @@
+interface:
+  display_name: "Novel Writing"
+  short_description: "Run bounded writing, drafts, and AI review"
+  default_prompt: "Use $novel-writing to open a bounded writing session, draft, and review a scene."

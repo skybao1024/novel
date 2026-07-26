@@ -1,0 +1,68 @@
+{
+  "$id": "https://novel.local/schemas/draft-revision.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "base_document_revision": {
+      "anyOf": [
+        {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Base Document Revision"
+    },
+    "content_digest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Content Digest",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "draft_revision": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Draft Revision",
+      "type": "string"
+    },
+    "parent_revision": {
+      "anyOf": [
+        {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Parent Revision"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "writing_session_id": {
+      "format": "uuid",
+      "title": "Writing Session Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "writing_session_id",
+    "draft_revision",
+    "content_digest",
+    "created_at"
+  ],
+  "title": "DraftRevision",
+  "type": "object",
+  "x-schema-version": "1.0.0"
+}

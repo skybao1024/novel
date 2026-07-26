@@ -1,0 +1,22 @@
+{
+  "name": "codex-novel",
+  "version": "0.4.0",
+  "description": "Bootstrap, write, review, and transactionally publish local long-form fiction through the Novel CLI.",
+  "author": {
+    "name": "Novel Project"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Codex Novel",
+    "shortDescription": "Approved local long-form fiction workflow",
+    "longDescription": "Codex Novel initializes approved Intent, runs bounded writing and review, navigates exact historical prose, and publishes immutable Draft revisions only after the author approves the exact digest.",
+    "developerName": "Novel Project",
+    "category": "Productivity",
+    "capabilities": [
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Use the Novel creation skills to initialize, write, review, and publish through explicit project and digest boundaries."
+    ]
+  }
+}

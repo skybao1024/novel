@@ -1,0 +1,1797 @@
+{
+  "$defs": {
+    "Approval": {
+      "additionalProperties": false,
+      "properties": {
+        "approval_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Approval Digest",
+          "type": "string"
+        },
+        "approved_at": {
+          "format": "date-time",
+          "title": "Approved At",
+          "type": "string"
+        },
+        "operation_id": {
+          "format": "uuid",
+          "title": "Operation Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "operation_id",
+        "approval_digest",
+        "approved_at"
+      ],
+      "title": "Approval",
+      "type": "object"
+    },
+    "Assertion": {
+      "additionalProperties": false,
+      "description": "A scope's time-bounded stance toward a Proposition.",
+      "properties": {
+        "assertion_id": {
+          "format": "uuid",
+          "title": "Assertion Id",
+          "type": "string"
+        },
+        "certainty": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Certainty",
+          "type": "number"
+        },
+        "change_set_id": {
+          "format": "uuid",
+          "title": "Change Set Id",
+          "type": "string"
+        },
+        "holder_entity_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Holder Entity Id"
+        },
+        "proposition_id": {
+          "format": "uuid",
+          "title": "Proposition Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "scope": {
+          "$ref": "#/$defs/AssertionScope"
+        },
+        "source_ref_id": {
+          "format": "uuid",
+          "title": "Source Ref Id",
+          "type": "string"
+        },
+        "stance": {
+          "$ref": "#/$defs/AssertionStance"
+        },
+        "valid_from": {
+          "$ref": "#/$defs/StoryTime"
+        },
+        "valid_to": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StoryTime"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "assertion_id",
+        "proposition_id",
+        "scope",
+        "stance",
+        "certainty",
+        "valid_from",
+        "source_ref_id",
+        "change_set_id"
+      ],
+      "title": "Assertion",
+      "type": "object"
+    },
+    "AssertionScope": {
+      "enum": [
+        "objective",
+        "character",
+        "reader",
+        "narrator"
+      ],
+      "title": "AssertionScope",
+      "type": "string"
+    },
+    "AssertionStance": {
+      "enum": [
+        "true",
+        "false",
+        "unknown",
+        "suspected",
+        "claimed",
+        "disbelieved"
+      ],
+      "title": "AssertionStance",
+      "type": "string"
+    },
+    "CanonChangeSet": {
+      "additionalProperties": false,
+      "description": "An immutable, approved group of append-only Canon operations.",
+      "properties": {
+        "approved_at": {
+          "format": "date-time",
+          "title": "Approved At",
+          "type": "string"
+        },
+        "base_revision": {
+          "minLength": 1,
+          "title": "Base Revision",
+          "type": "string"
+        },
+        "change_set_id": {
+          "format": "uuid",
+          "title": "Change Set Id",
+          "type": "string"
+        },
+        "operations": {
+          "items": {
+            "$ref": "#/$defs/ChangeSetOperation"
+          },
+          "minItems": 1,
+          "title": "Operations",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_scene_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Scene Id"
+        }
+      },
+      "required": [
+        "change_set_id",
+        "base_revision",
+        "operations",
+        "approved_at"
+      ],
+      "title": "CanonChangeSet",
+      "type": "object"
+    },
+    "CanonLedgerEntry": {
+      "additionalProperties": false,
+      "description": "One atomic, approved JSONL entry in the Canon Ledger.",
+      "properties": {
+        "approved_at": {
+          "format": "date-time",
+          "title": "Approved At",
+          "type": "string"
+        },
+        "base_revision": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Base Revision",
+          "type": "string"
+        },
+        "ledger_entry_id": {
+          "format": "uuid",
+          "title": "Ledger Entry Id",
+          "type": "string"
+        },
+        "ledger_sequence": {
+          "minimum": 1,
+          "title": "Ledger Sequence",
+          "type": "integer"
+        },
+        "records": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "canon_change_set": "#/$defs/ChangeSetLedgerRecord",
+                "document": "#/$defs/DocumentLedgerRecord",
+                "entity": "#/$defs/EntityLedgerRecord",
+                "entity_alias": "#/$defs/EntityAliasLedgerRecord",
+                "event": "#/$defs/EventLedgerRecord",
+                "event_edge": "#/$defs/EventEdgeLedgerRecord",
+                "scene": "#/$defs/SceneLedgerRecord",
+                "source_ref": "#/$defs/SourceRefLedgerRecord"
+              },
+              "propertyName": "record_type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/EntityLedgerRecord"
+              },
+              {
+                "$ref": "#/$defs/EntityAliasLedgerRecord"
+              },
+              {
+                "$ref": "#/$defs/DocumentLedgerRecord"
+              },
+              {
+                "$ref": "#/$defs/SceneLedgerRecord"
+              },
+              {
+                "$ref": "#/$defs/SourceRefLedgerRecord"
+              },
+              {
+                "$ref": "#/$defs/EventLedgerRecord"
+              },
+              {
+                "$ref": "#/$defs/EventEdgeLedgerRecord"
+              },
+              {
+                "$ref": "#/$defs/ChangeSetLedgerRecord"
+              }
+            ]
+          },
+          "minItems": 1,
+          "title": "Records",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_scene_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Scene Id"
+        }
+      },
+      "required": [
+        "ledger_sequence",
+        "ledger_entry_id",
+        "base_revision",
+        "approved_at",
+        "records"
+      ],
+      "title": "CanonLedgerEntry",
+      "type": "object"
+    },
+    "ChangeSetLedgerRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "record_type": {
+          "const": "canon_change_set",
+          "default": "canon_change_set",
+          "title": "Record Type",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/$defs/CanonChangeSet"
+        }
+      },
+      "required": [
+        "value"
+      ],
+      "title": "ChangeSetLedgerRecord",
+      "type": "object"
+    },
+    "ChangeSetOperation": {
+      "additionalProperties": false,
+      "description": "One append-only operation against the Canon assertion history.",
+      "properties": {
+        "assertion": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Assertion"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "op": {
+          "$ref": "#/$defs/ChangeSetOperationKind"
+        },
+        "operation_id": {
+          "format": "uuid",
+          "title": "Operation Id",
+          "type": "string"
+        },
+        "proposition": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Proposition"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "reason": {
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_ref_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Ref Id"
+        },
+        "target_assertion_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target Assertion Id"
+        }
+      },
+      "required": [
+        "operation_id",
+        "op",
+        "reason"
+      ],
+      "title": "ChangeSetOperation",
+      "type": "object"
+    },
+    "ChangeSetOperationKind": {
+      "enum": [
+        "assert",
+        "retract",
+        "supersede",
+        "correct"
+      ],
+      "title": "ChangeSetOperationKind",
+      "type": "string"
+    },
+    "Chapter": {
+      "additionalProperties": false,
+      "description": "An explicit, stable Chapter boundary over existing Scene IDs.",
+      "properties": {
+        "chapter_id": {
+          "format": "uuid",
+          "title": "Chapter Id",
+          "type": "string"
+        },
+        "chapter_number": {
+          "minimum": 1,
+          "title": "Chapter Number",
+          "type": "integer"
+        },
+        "scene_ids": {
+          "items": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Scene Ids",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "chapter_id",
+        "chapter_number",
+        "title",
+        "scene_ids"
+      ],
+      "title": "Chapter",
+      "type": "object"
+    },
+    "ChapterSummary": {
+      "additionalProperties": false,
+      "description": "Non-Canon aggregation over one Chapter's Scene Summaries.",
+      "properties": {
+        "chapter_id": {
+          "format": "uuid",
+          "title": "Chapter Id",
+          "type": "string"
+        },
+        "chapter_number": {
+          "minimum": 1,
+          "title": "Chapter Number",
+          "type": "integer"
+        },
+        "main_entity_ids": {
+          "default": [],
+          "items": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Main Entity Ids",
+          "type": "array"
+        },
+        "scene_ids": {
+          "items": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Scene Ids",
+          "type": "array"
+        },
+        "scene_summary_dependencies": {
+          "items": {
+            "$ref": "#/$defs/SceneSummaryDependency"
+          },
+          "minItems": 1,
+          "title": "Scene Summary Dependencies",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "summary": {
+          "minLength": 1,
+          "title": "Summary",
+          "type": "string"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "chapter_id",
+        "chapter_number",
+        "title",
+        "scene_ids",
+        "scene_summary_dependencies",
+        "summary"
+      ],
+      "title": "ChapterSummary",
+      "type": "object"
+    },
+    "Document": {
+      "additionalProperties": false,
+      "description": "A versioned Canon or structure document inside a novel project.",
+      "properties": {
+        "document_id": {
+          "format": "uuid",
+          "title": "Document Id",
+          "type": "string"
+        },
+        "document_kind": {
+          "$ref": "#/$defs/DocumentKind"
+        },
+        "relative_path": {
+          "minLength": 1,
+          "pattern": "^[^\\\\]+$",
+          "title": "Relative Path",
+          "type": "string"
+        },
+        "revision": {
+          "minLength": 1,
+          "title": "Revision",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "document_id",
+        "relative_path",
+        "document_kind",
+        "revision"
+      ],
+      "title": "Document",
+      "type": "object"
+    },
+    "DocumentKind": {
+      "enum": [
+        "manuscript",
+        "manual",
+        "structure"
+      ],
+      "title": "DocumentKind",
+      "type": "string"
+    },
+    "DocumentLedgerRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "record_type": {
+          "const": "document",
+          "default": "document",
+          "title": "Record Type",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/$defs/Document"
+        }
+      },
+      "required": [
+        "value"
+      ],
+      "title": "DocumentLedgerRecord",
+      "type": "object"
+    },
+    "Entity": {
+      "additionalProperties": false,
+      "description": "A long-lived narrative object addressed only through an opaque UUID.",
+      "properties": {
+        "created_revision": {
+          "minLength": 1,
+          "title": "Created Revision",
+          "type": "string"
+        },
+        "display_name": {
+          "minLength": 1,
+          "title": "Display Name",
+          "type": "string"
+        },
+        "entity_id": {
+          "format": "uuid",
+          "title": "Entity Id",
+          "type": "string"
+        },
+        "entity_type": {
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9_-]*$",
+          "title": "Entity Type",
+          "type": "string"
+        },
+        "retired_revision": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Retired Revision"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/EntityStatus",
+          "default": "active"
+        }
+      },
+      "required": [
+        "entity_id",
+        "entity_type",
+        "display_name",
+        "created_revision"
+      ],
+      "title": "Entity",
+      "type": "object"
+    },
+    "EntityAlias": {
+      "additionalProperties": false,
+      "description": "A time-bounded name for an entity; never an association key.",
+      "properties": {
+        "alias_id": {
+          "format": "uuid",
+          "title": "Alias Id",
+          "type": "string"
+        },
+        "alias_text": {
+          "minLength": 1,
+          "title": "Alias Text",
+          "type": "string"
+        },
+        "alias_type": {
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9_-]*$",
+          "title": "Alias Type",
+          "type": "string"
+        },
+        "entity_id": {
+          "format": "uuid",
+          "title": "Entity Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "used_by_entity_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Used By Entity Id"
+        },
+        "valid_from": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StoryTime"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "valid_to": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StoryTime"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "alias_id",
+        "entity_id",
+        "alias_text",
+        "alias_type"
+      ],
+      "title": "EntityAlias",
+      "type": "object"
+    },
+    "EntityAliasLedgerRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "record_type": {
+          "const": "entity_alias",
+          "default": "entity_alias",
+          "title": "Record Type",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/$defs/EntityAlias"
+        }
+      },
+      "required": [
+        "value"
+      ],
+      "title": "EntityAliasLedgerRecord",
+      "type": "object"
+    },
+    "EntityLedgerRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "record_type": {
+          "const": "entity",
+          "default": "entity",
+          "title": "Record Type",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/$defs/Entity"
+        }
+      },
+      "required": [
+        "value"
+      ],
+      "title": "EntityLedgerRecord",
+      "type": "object"
+    },
+    "EntityStatus": {
+      "enum": [
+        "active",
+        "retired"
+      ],
+      "title": "EntityStatus",
+      "type": "string"
+    },
+    "Event": {
+      "additionalProperties": false,
+      "description": "A story-world occurrence and the order in which readers encounter it.",
+      "properties": {
+        "canon_status": {
+          "$ref": "#/$defs/EventCanonStatus",
+          "default": "approved"
+        },
+        "event_id": {
+          "format": "uuid",
+          "title": "Event Id",
+          "type": "string"
+        },
+        "event_type": {
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9_.-]*$",
+          "title": "Event Type",
+          "type": "string"
+        },
+        "location_entity_ids": {
+          "default": [],
+          "items": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "title": "Location Entity Ids",
+          "type": "array"
+        },
+        "narrative_order": {
+          "minimum": 1,
+          "title": "Narrative Order",
+          "type": "integer"
+        },
+        "participant_entity_ids": {
+          "items": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Participant Entity Ids",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_ref_ids": {
+          "items": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Source Ref Ids",
+          "type": "array"
+        },
+        "source_scene_id": {
+          "format": "uuid",
+          "title": "Source Scene Id",
+          "type": "string"
+        },
+        "story_time": {
+          "$ref": "#/$defs/StoryTime"
+        },
+        "summary": {
+          "minLength": 1,
+          "title": "Summary",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event_id",
+        "event_type",
+        "story_time",
+        "narrative_order",
+        "participant_entity_ids",
+        "source_scene_id",
+        "source_ref_ids",
+        "summary"
+      ],
+      "title": "Event",
+      "type": "object"
+    },
+    "EventCanonStatus": {
+      "enum": [
+        "candidate",
+        "approved",
+        "superseded"
+      ],
+      "title": "EventCanonStatus",
+      "type": "string"
+    },
+    "EventEdge": {
+      "additionalProperties": false,
+      "description": "A directed semantic relation between two distinct events.",
+      "properties": {
+        "edge_type": {
+          "$ref": "#/$defs/EventEdgeType"
+        },
+        "event_edge_id": {
+          "format": "uuid",
+          "title": "Event Edge Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_event_id": {
+          "format": "uuid",
+          "title": "Source Event Id",
+          "type": "string"
+        },
+        "source_ref_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Ref Id"
+        },
+        "target_event_id": {
+          "format": "uuid",
+          "title": "Target Event Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event_edge_id",
+        "source_event_id",
+        "target_event_id",
+        "edge_type"
+      ],
+      "title": "EventEdge",
+      "type": "object"
+    },
+    "EventEdgeLedgerRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "record_type": {
+          "const": "event_edge",
+          "default": "event_edge",
+          "title": "Record Type",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/$defs/EventEdge"
+        }
+      },
+      "required": [
+        "value"
+      ],
+      "title": "EventEdgeLedgerRecord",
+      "type": "object"
+    },
+    "EventEdgeType": {
+      "enum": [
+        "causes",
+        "enables",
+        "prevents",
+        "reveals",
+        "foreshadows",
+        "pays_off",
+        "contradicts"
+      ],
+      "title": "EventEdgeType",
+      "type": "string"
+    },
+    "EventLedgerRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "record_type": {
+          "const": "event",
+          "default": "event",
+          "title": "Record Type",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/$defs/Event"
+        }
+      },
+      "required": [
+        "value"
+      ],
+      "title": "EventLedgerRecord",
+      "type": "object"
+    },
+    "ObjectKind": {
+      "enum": [
+        "entity",
+        "value"
+      ],
+      "title": "ObjectKind",
+      "type": "string"
+    },
+    "Proposition": {
+      "additionalProperties": false,
+      "description": "A claim-shaped statement that intentionally carries no truth value.",
+      "properties": {
+        "object_entity_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Object Entity Id"
+        },
+        "object_kind": {
+          "$ref": "#/$defs/ObjectKind"
+        },
+        "object_value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Object Value"
+        },
+        "predicate": {
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9_.-]*$",
+          "title": "Predicate",
+          "type": "string"
+        },
+        "proposition_id": {
+          "format": "uuid",
+          "title": "Proposition Id",
+          "type": "string"
+        },
+        "qualifiers_json": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Qualifier"
+          },
+          "title": "Qualifiers Json",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "subject_entity_id": {
+          "format": "uuid",
+          "title": "Subject Entity Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "proposition_id",
+        "subject_entity_id",
+        "predicate",
+        "object_kind"
+      ],
+      "title": "Proposition",
+      "type": "object"
+    },
+    "PublicationPlan": {
+      "additionalProperties": false,
+      "properties": {
+        "approval_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Approval Digest",
+          "type": "string"
+        },
+        "base_canon_revision": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Base Canon Revision",
+          "type": "string"
+        },
+        "base_document_revision": {
+          "anyOf": [
+            {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Base Document Revision"
+        },
+        "base_intent_revision": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Base Intent Revision",
+          "type": "string"
+        },
+        "canon_diff": {
+          "minLength": 1,
+          "title": "Canon Diff",
+          "type": "string"
+        },
+        "chapter_change": {
+          "$ref": "#/$defs/Chapter"
+        },
+        "chapter_summary_change": {
+          "$ref": "#/$defs/ChapterSummary"
+        },
+        "draft_revision": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Draft Revision",
+          "type": "string"
+        },
+        "intent_candidate_revision": {
+          "anyOf": [
+            {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Intent Candidate Revision"
+        },
+        "intent_diff": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Intent Diff"
+        },
+        "intent_revision_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Intent Revision Id"
+        },
+        "ledger_entry": {
+          "$ref": "#/$defs/CanonLedgerEntry"
+        },
+        "manuscript_diff": {
+          "minLength": 1,
+          "title": "Manuscript Diff",
+          "type": "string"
+        },
+        "manuscript_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Manuscript Digest",
+          "type": "string"
+        },
+        "prepared_at": {
+          "format": "date-time",
+          "title": "Prepared At",
+          "type": "string"
+        },
+        "project_id": {
+          "format": "uuid",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "publication_id": {
+          "format": "uuid",
+          "title": "Publication Id",
+          "type": "string"
+        },
+        "review_refs": {
+          "items": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Review Refs",
+          "type": "array"
+        },
+        "scene_change": {
+          "$ref": "#/$defs/Scene"
+        },
+        "scene_summary_change": {
+          "$ref": "#/$defs/SceneSummary"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "structure_diff": {
+          "minLength": 1,
+          "title": "Structure Diff",
+          "type": "string"
+        },
+        "summary_diff": {
+          "minLength": 1,
+          "title": "Summary Diff",
+          "type": "string"
+        },
+        "target_document": {
+          "$ref": "#/$defs/Document"
+        },
+        "unresolved_questions": {
+          "default": [],
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 64,
+          "title": "Unresolved Questions",
+          "type": "array"
+        },
+        "writing_session_id": {
+          "format": "uuid",
+          "title": "Writing Session Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "publication_id",
+        "project_id",
+        "writing_session_id",
+        "draft_revision",
+        "base_canon_revision",
+        "base_intent_revision",
+        "target_document",
+        "scene_change",
+        "chapter_change",
+        "scene_summary_change",
+        "chapter_summary_change",
+        "ledger_entry",
+        "review_refs",
+        "manuscript_digest",
+        "manuscript_diff",
+        "structure_diff",
+        "summary_diff",
+        "canon_diff",
+        "approval_digest",
+        "prepared_at"
+      ],
+      "title": "PublicationPlan",
+      "type": "object"
+    },
+    "PublicationStatus": {
+      "enum": [
+        "prepared",
+        "approved",
+        "manuscript_installed",
+        "navigation_installed",
+        "intent_installed",
+        "ledger_appended",
+        "projection_rebuilt",
+        "completed"
+      ],
+      "title": "PublicationStatus",
+      "type": "string"
+    },
+    "Qualifier": {
+      "additionalProperties": false,
+      "description": "An immutable scalar qualifier attached to a proposition.",
+      "properties": {
+        "key": {
+          "minLength": 1,
+          "title": "Key",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "required": [
+        "key",
+        "value"
+      ],
+      "title": "Qualifier",
+      "type": "object"
+    },
+    "Scene": {
+      "additionalProperties": false,
+      "description": "A scene's story position and reader-facing order.",
+      "properties": {
+        "chapter_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Chapter Id"
+        },
+        "location_entity_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Location Entity Id"
+        },
+        "narrative_order": {
+          "minimum": 1,
+          "title": "Narrative Order",
+          "type": "integer"
+        },
+        "pov_entity_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pov Entity Id"
+        },
+        "revision": {
+          "minLength": 1,
+          "title": "Revision",
+          "type": "string"
+        },
+        "scene_id": {
+          "format": "uuid",
+          "title": "Scene Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_document_id": {
+          "format": "uuid",
+          "title": "Source Document Id",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/SceneStatus"
+        },
+        "story_time": {
+          "$ref": "#/$defs/StoryTime"
+        }
+      },
+      "required": [
+        "scene_id",
+        "narrative_order",
+        "story_time",
+        "status",
+        "source_document_id",
+        "revision"
+      ],
+      "title": "Scene",
+      "type": "object"
+    },
+    "SceneLedgerRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "record_type": {
+          "const": "scene",
+          "default": "scene",
+          "title": "Record Type",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/$defs/Scene"
+        }
+      },
+      "required": [
+        "value"
+      ],
+      "title": "SceneLedgerRecord",
+      "type": "object"
+    },
+    "SceneStatus": {
+      "enum": [
+        "planned",
+        "drafting",
+        "candidate",
+        "approved",
+        "superseded"
+      ],
+      "title": "SceneStatus",
+      "type": "string"
+    },
+    "SceneSummary": {
+      "additionalProperties": false,
+      "description": "Non-Canon navigation memory for one approved Scene revision.",
+      "properties": {
+        "chapter_id": {
+          "format": "uuid",
+          "title": "Chapter Id",
+          "type": "string"
+        },
+        "key_changes": {
+          "default": [],
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Key Changes",
+          "type": "array"
+        },
+        "main_entity_ids": {
+          "default": [],
+          "items": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Main Entity Ids",
+          "type": "array"
+        },
+        "open_questions": {
+          "default": [],
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Open Questions",
+          "type": "array"
+        },
+        "scene_id": {
+          "format": "uuid",
+          "title": "Scene Id",
+          "type": "string"
+        },
+        "scene_number_in_chapter": {
+          "minimum": 1,
+          "title": "Scene Number In Chapter",
+          "type": "integer"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_document_id": {
+          "format": "uuid",
+          "title": "Source Document Id",
+          "type": "string"
+        },
+        "source_revision": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Source Revision",
+          "type": "string"
+        },
+        "summary": {
+          "minLength": 1,
+          "title": "Summary",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene_id",
+        "chapter_id",
+        "scene_number_in_chapter",
+        "source_document_id",
+        "source_revision",
+        "summary"
+      ],
+      "title": "SceneSummary",
+      "type": "object"
+    },
+    "SceneSummaryDependency": {
+      "additionalProperties": false,
+      "description": "The exact Scene Summary revision consumed by a Chapter Summary.",
+      "properties": {
+        "scene_id": {
+          "format": "uuid",
+          "title": "Scene Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_revision": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Source Revision",
+          "type": "string"
+        },
+        "summary_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Summary Digest",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene_id",
+        "source_revision",
+        "summary_digest"
+      ],
+      "title": "SceneSummaryDependency",
+      "type": "object"
+    },
+    "SourceRef": {
+      "additionalProperties": false,
+      "description": "A revision-aware source pointer that survives ordinary text movement.",
+      "properties": {
+        "document_id": {
+          "format": "uuid",
+          "title": "Document Id",
+          "type": "string"
+        },
+        "document_revision": {
+          "minLength": 1,
+          "title": "Document Revision",
+          "type": "string"
+        },
+        "excerpt": {
+          "minLength": 1,
+          "title": "Excerpt",
+          "type": "string"
+        },
+        "fragment_ordinal": {
+          "minimum": 1,
+          "title": "Fragment Ordinal",
+          "type": "integer"
+        },
+        "quote_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Quote Hash",
+          "type": "string"
+        },
+        "scene_id": {
+          "format": "uuid",
+          "title": "Scene Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_ref_id": {
+          "format": "uuid",
+          "title": "Source Ref Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_ref_id",
+        "document_id",
+        "scene_id",
+        "document_revision",
+        "fragment_ordinal",
+        "quote_hash",
+        "excerpt"
+      ],
+      "title": "SourceRef",
+      "type": "object"
+    },
+    "SourceRefLedgerRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "record_type": {
+          "const": "source_ref",
+          "default": "source_ref",
+          "title": "Record Type",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/$defs/SourceRef"
+        }
+      },
+      "required": [
+        "value"
+      ],
+      "title": "SourceRefLedgerRecord",
+      "type": "object"
+    },
+    "StoryTime": {
+      "additionalProperties": false,
+      "description": "A calendar-neutral position on a story timeline.\n\nNarrative order deliberately does not belong to this value object. It is a\nproperty of the scene or event through which readers encounter the event.",
+      "properties": {
+        "display_time": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Display Time"
+        },
+        "kind": {
+          "$ref": "#/$defs/StoryTimeKind"
+        },
+        "relative_offset": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Relative Offset"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "story_time_end": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Story Time End"
+        },
+        "story_time_start": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Story Time Start"
+        },
+        "time_anchor_event_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Time Anchor Event Id"
+        },
+        "timeline_id": {
+          "default": "main",
+          "minLength": 1,
+          "title": "Timeline Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "StoryTime",
+      "type": "object"
+    },
+    "StoryTimeKind": {
+      "enum": [
+        "exact",
+        "ordinal",
+        "relative",
+        "interval",
+        "unknown"
+      ],
+      "title": "StoryTimeKind",
+      "type": "string"
+    }
+  },
+  "$id": "https://novel.local/schemas/publication.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "approval": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Approval"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "completed_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Completed At"
+    },
+    "plan": {
+      "$ref": "#/$defs/PublicationPlan"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "status": {
+      "$ref": "#/$defs/PublicationStatus"
+    }
+  },
+  "required": [
+    "plan",
+    "status"
+  ],
+  "title": "Publication",
+  "type": "object",
+  "x-schema-version": "1.0.0"
+}

@@ -1,0 +1,207 @@
+{
+  "$defs": {
+    "SceneStatus": {
+      "enum": [
+        "planned",
+        "drafting",
+        "candidate",
+        "approved",
+        "superseded"
+      ],
+      "title": "SceneStatus",
+      "type": "string"
+    },
+    "StoryTime": {
+      "additionalProperties": false,
+      "description": "A calendar-neutral position on a story timeline.\n\nNarrative order deliberately does not belong to this value object. It is a\nproperty of the scene or event through which readers encounter the event.",
+      "properties": {
+        "display_time": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Display Time"
+        },
+        "kind": {
+          "$ref": "#/$defs/StoryTimeKind"
+        },
+        "relative_offset": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Relative Offset"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "story_time_end": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Story Time End"
+        },
+        "story_time_start": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Story Time Start"
+        },
+        "time_anchor_event_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Time Anchor Event Id"
+        },
+        "timeline_id": {
+          "default": "main",
+          "minLength": 1,
+          "title": "Timeline Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "StoryTime",
+      "type": "object"
+    },
+    "StoryTimeKind": {
+      "enum": [
+        "exact",
+        "ordinal",
+        "relative",
+        "interval",
+        "unknown"
+      ],
+      "title": "StoryTimeKind",
+      "type": "string"
+    }
+  },
+  "$id": "https://novel.local/schemas/scene.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "A scene's story position and reader-facing order.",
+  "properties": {
+    "chapter_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Chapter Id"
+    },
+    "location_entity_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Location Entity Id"
+    },
+    "narrative_order": {
+      "minimum": 1,
+      "title": "Narrative Order",
+      "type": "integer"
+    },
+    "pov_entity_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Pov Entity Id"
+    },
+    "revision": {
+      "minLength": 1,
+      "title": "Revision",
+      "type": "string"
+    },
+    "scene_id": {
+      "format": "uuid",
+      "title": "Scene Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_document_id": {
+      "format": "uuid",
+      "title": "Source Document Id",
+      "type": "string"
+    },
+    "status": {
+      "$ref": "#/$defs/SceneStatus"
+    },
+    "story_time": {
+      "$ref": "#/$defs/StoryTime"
+    }
+  },
+  "required": [
+    "scene_id",
+    "narrative_order",
+    "story_time",
+    "status",
+    "source_document_id",
+    "revision"
+  ],
+  "title": "Scene",
+  "type": "object",
+  "x-schema-version": "1.0.0"
+}

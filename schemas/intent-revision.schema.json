@@ -1,0 +1,176 @@
+{
+  "$defs": {
+    "Approval": {
+      "additionalProperties": false,
+      "properties": {
+        "approval_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Approval Digest",
+          "type": "string"
+        },
+        "approved_at": {
+          "format": "date-time",
+          "title": "Approved At",
+          "type": "string"
+        },
+        "operation_id": {
+          "format": "uuid",
+          "title": "Operation Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "operation_id",
+        "approval_digest",
+        "approved_at"
+      ],
+      "title": "Approval",
+      "type": "object"
+    },
+    "IntentContent": {
+      "additionalProperties": false,
+      "description": "The four authoritative, reviewable Intent Canon documents.",
+      "properties": {
+        "creative_brief": {
+          "minLength": 1,
+          "title": "Creative Brief",
+          "type": "string"
+        },
+        "current_outline": {
+          "minLength": 1,
+          "title": "Current Outline",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "story_bible": {
+          "minLength": 1,
+          "title": "Story Bible",
+          "type": "string"
+        },
+        "writing_rules": {
+          "minLength": 1,
+          "title": "Writing Rules",
+          "type": "string"
+        }
+      },
+      "required": [
+        "creative_brief",
+        "story_bible",
+        "writing_rules",
+        "current_outline"
+      ],
+      "title": "IntentContent",
+      "type": "object"
+    },
+    "IntentRevisionStatus": {
+      "enum": [
+        "prepared",
+        "approved",
+        "applied"
+      ],
+      "title": "IntentRevisionStatus",
+      "type": "string"
+    }
+  },
+  "$id": "https://novel.local/schemas/intent-revision.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "applied_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Applied At"
+    },
+    "approval": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Approval"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "approval_digest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Approval Digest",
+      "type": "string"
+    },
+    "base_intent_revision": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Base Intent Revision",
+      "type": "string"
+    },
+    "candidate": {
+      "$ref": "#/$defs/IntentContent"
+    },
+    "candidate_revision": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Candidate Revision",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "intent_diff": {
+      "minLength": 1,
+      "title": "Intent Diff",
+      "type": "string"
+    },
+    "intent_revision_id": {
+      "format": "uuid",
+      "title": "Intent Revision Id",
+      "type": "string"
+    },
+    "project_id": {
+      "format": "uuid",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "status": {
+      "$ref": "#/$defs/IntentRevisionStatus"
+    }
+  },
+  "required": [
+    "intent_revision_id",
+    "project_id",
+    "base_intent_revision",
+    "candidate",
+    "candidate_revision",
+    "intent_diff",
+    "approval_digest",
+    "status",
+    "created_at"
+  ],
+  "title": "IntentRevision",
+  "type": "object",
+  "x-schema-version": "1.0.0"
+}

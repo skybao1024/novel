@@ -1,0 +1,383 @@
+{
+  "$defs": {
+    "Chapter": {
+      "additionalProperties": false,
+      "description": "An explicit, stable Chapter boundary over existing Scene IDs.",
+      "properties": {
+        "chapter_id": {
+          "format": "uuid",
+          "title": "Chapter Id",
+          "type": "string"
+        },
+        "chapter_number": {
+          "minimum": 1,
+          "title": "Chapter Number",
+          "type": "integer"
+        },
+        "scene_ids": {
+          "items": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Scene Ids",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "chapter_id",
+        "chapter_number",
+        "title",
+        "scene_ids"
+      ],
+      "title": "Chapter",
+      "type": "object"
+    },
+    "Entity": {
+      "additionalProperties": false,
+      "description": "A long-lived narrative object addressed only through an opaque UUID.",
+      "properties": {
+        "created_revision": {
+          "minLength": 1,
+          "title": "Created Revision",
+          "type": "string"
+        },
+        "display_name": {
+          "minLength": 1,
+          "title": "Display Name",
+          "type": "string"
+        },
+        "entity_id": {
+          "format": "uuid",
+          "title": "Entity Id",
+          "type": "string"
+        },
+        "entity_type": {
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9_-]*$",
+          "title": "Entity Type",
+          "type": "string"
+        },
+        "retired_revision": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Retired Revision"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/EntityStatus",
+          "default": "active"
+        }
+      },
+      "required": [
+        "entity_id",
+        "entity_type",
+        "display_name",
+        "created_revision"
+      ],
+      "title": "Entity",
+      "type": "object"
+    },
+    "EntityStatus": {
+      "enum": [
+        "active",
+        "retired"
+      ],
+      "title": "EntityStatus",
+      "type": "string"
+    },
+    "IntentContent": {
+      "additionalProperties": false,
+      "description": "The four authoritative, reviewable Intent Canon documents.",
+      "properties": {
+        "creative_brief": {
+          "minLength": 1,
+          "title": "Creative Brief",
+          "type": "string"
+        },
+        "current_outline": {
+          "minLength": 1,
+          "title": "Current Outline",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "story_bible": {
+          "minLength": 1,
+          "title": "Story Bible",
+          "type": "string"
+        },
+        "writing_rules": {
+          "minLength": 1,
+          "title": "Writing Rules",
+          "type": "string"
+        }
+      },
+      "required": [
+        "creative_brief",
+        "story_bible",
+        "writing_rules",
+        "current_outline"
+      ],
+      "title": "IntentContent",
+      "type": "object"
+    },
+    "SceneSummary": {
+      "additionalProperties": false,
+      "description": "Non-Canon navigation memory for one approved Scene revision.",
+      "properties": {
+        "chapter_id": {
+          "format": "uuid",
+          "title": "Chapter Id",
+          "type": "string"
+        },
+        "key_changes": {
+          "default": [],
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Key Changes",
+          "type": "array"
+        },
+        "main_entity_ids": {
+          "default": [],
+          "items": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Main Entity Ids",
+          "type": "array"
+        },
+        "open_questions": {
+          "default": [],
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Open Questions",
+          "type": "array"
+        },
+        "scene_id": {
+          "format": "uuid",
+          "title": "Scene Id",
+          "type": "string"
+        },
+        "scene_number_in_chapter": {
+          "minimum": 1,
+          "title": "Scene Number In Chapter",
+          "type": "integer"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_document_id": {
+          "format": "uuid",
+          "title": "Source Document Id",
+          "type": "string"
+        },
+        "source_revision": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Source Revision",
+          "type": "string"
+        },
+        "summary": {
+          "minLength": 1,
+          "title": "Summary",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene_id",
+        "chapter_id",
+        "scene_number_in_chapter",
+        "source_document_id",
+        "source_revision",
+        "summary"
+      ],
+      "title": "SceneSummary",
+      "type": "object"
+    }
+  },
+  "$id": "https://novel.local/schemas/creation-context.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "after_scene_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "After Scene Id"
+    },
+    "author_goal": {
+      "minLength": 1,
+      "title": "Author Goal",
+      "type": "string"
+    },
+    "base_canon_revision": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Base Canon Revision",
+      "type": "string"
+    },
+    "base_intent_revision": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Base Intent Revision",
+      "type": "string"
+    },
+    "before_scene_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Before Scene Id"
+    },
+    "chapter": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Chapter"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "creative_constraints": {
+      "default": [],
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxItems": 64,
+      "title": "Creative Constraints",
+      "type": "array"
+    },
+    "important_entities": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Entity"
+      },
+      "title": "Important Entities",
+      "type": "array"
+    },
+    "intent": {
+      "$ref": "#/$defs/IntentContent"
+    },
+    "previous_scene_summary": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SceneSummary"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "previous_scene_text_available": {
+      "default": false,
+      "title": "Previous Scene Text Available",
+      "type": "boolean"
+    },
+    "project_id": {
+      "format": "uuid",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "query_capabilities": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Query Capabilities",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "target_chapter_id": {
+      "format": "uuid",
+      "title": "Target Chapter Id",
+      "type": "string"
+    },
+    "target_narrative_order": {
+      "minimum": 1,
+      "title": "Target Narrative Order",
+      "type": "integer"
+    },
+    "target_scene_id": {
+      "format": "uuid",
+      "title": "Target Scene Id",
+      "type": "string"
+    },
+    "writing_session_id": {
+      "format": "uuid",
+      "title": "Writing Session Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "project_id",
+    "writing_session_id",
+    "author_goal",
+    "target_scene_id",
+    "target_chapter_id",
+    "target_narrative_order",
+    "base_canon_revision",
+    "base_intent_revision",
+    "intent",
+    "query_capabilities"
+  ],
+  "title": "CreationContext",
+  "type": "object",
+  "x-schema-version": "1.0.0"
+}

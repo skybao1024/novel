@@ -1,0 +1,71 @@
+{
+  "$defs": {
+    "EntityStatus": {
+      "enum": [
+        "active",
+        "retired"
+      ],
+      "title": "EntityStatus",
+      "type": "string"
+    }
+  },
+  "$id": "https://novel.local/schemas/entity.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "A long-lived narrative object addressed only through an opaque UUID.",
+  "properties": {
+    "created_revision": {
+      "minLength": 1,
+      "title": "Created Revision",
+      "type": "string"
+    },
+    "display_name": {
+      "minLength": 1,
+      "title": "Display Name",
+      "type": "string"
+    },
+    "entity_id": {
+      "format": "uuid",
+      "title": "Entity Id",
+      "type": "string"
+    },
+    "entity_type": {
+      "minLength": 1,
+      "pattern": "^[a-z][a-z0-9_-]*$",
+      "title": "Entity Type",
+      "type": "string"
+    },
+    "retired_revision": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Retired Revision"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "status": {
+      "$ref": "#/$defs/EntityStatus",
+      "default": "active"
+    }
+  },
+  "required": [
+    "entity_id",
+    "entity_type",
+    "display_name",
+    "created_revision"
+  ],
+  "title": "Entity",
+  "type": "object",
+  "x-schema-version": "1.0.0"
+}

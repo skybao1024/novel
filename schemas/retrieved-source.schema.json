@@ -1,0 +1,110 @@
+{
+  "$defs": {
+    "RetrievalKind": {
+      "enum": [
+        "chapter_summary",
+        "scene_summary",
+        "exact_scene",
+        "canon_query"
+      ],
+      "title": "RetrievalKind",
+      "type": "string"
+    }
+  },
+  "$id": "https://novel.local/schemas/retrieved-source.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "chapter_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Chapter Id"
+    },
+    "document_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Document Id"
+    },
+    "document_revision": {
+      "anyOf": [
+        {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Document Revision"
+    },
+    "retrieval_kind": {
+      "$ref": "#/$defs/RetrievalKind"
+    },
+    "retrieval_reason": {
+      "minLength": 1,
+      "title": "Retrieval Reason",
+      "type": "string"
+    },
+    "retrieved_at": {
+      "format": "date-time",
+      "title": "Retrieved At",
+      "type": "string"
+    },
+    "retrieved_source_id": {
+      "format": "uuid",
+      "title": "Retrieved Source Id",
+      "type": "string"
+    },
+    "scene_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Scene Id"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "writing_session_id": {
+      "format": "uuid",
+      "title": "Writing Session Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "retrieved_source_id",
+    "writing_session_id",
+    "retrieval_kind",
+    "retrieval_reason",
+    "retrieved_at"
+  ],
+  "title": "RetrievedSource",
+  "type": "object",
+  "x-schema-version": "1.0.0"
+}

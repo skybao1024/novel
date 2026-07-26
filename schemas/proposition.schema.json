@@ -1,0 +1,128 @@
+{
+  "$defs": {
+    "ObjectKind": {
+      "enum": [
+        "entity",
+        "value"
+      ],
+      "title": "ObjectKind",
+      "type": "string"
+    },
+    "Qualifier": {
+      "additionalProperties": false,
+      "description": "An immutable scalar qualifier attached to a proposition.",
+      "properties": {
+        "key": {
+          "minLength": 1,
+          "title": "Key",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "required": [
+        "key",
+        "value"
+      ],
+      "title": "Qualifier",
+      "type": "object"
+    }
+  },
+  "$id": "https://novel.local/schemas/proposition.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "A claim-shaped statement that intentionally carries no truth value.",
+  "properties": {
+    "object_entity_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Object Entity Id"
+    },
+    "object_kind": {
+      "$ref": "#/$defs/ObjectKind"
+    },
+    "object_value": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "integer"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Object Value"
+    },
+    "predicate": {
+      "minLength": 1,
+      "pattern": "^[a-z][a-z0-9_.-]*$",
+      "title": "Predicate",
+      "type": "string"
+    },
+    "proposition_id": {
+      "format": "uuid",
+      "title": "Proposition Id",
+      "type": "string"
+    },
+    "qualifiers_json": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Qualifier"
+      },
+      "title": "Qualifiers Json",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "subject_entity_id": {
+      "format": "uuid",
+      "title": "Subject Entity Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "proposition_id",
+    "subject_entity_id",
+    "predicate",
+    "object_kind"
+  ],
+  "title": "Proposition",
+  "type": "object",
+  "x-schema-version": "1.0.0"
+}

@@ -1,0 +1,43 @@
+{
+  "$id": "https://novel.local/schemas/intent-content.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "The four authoritative, reviewable Intent Canon documents.",
+  "properties": {
+    "creative_brief": {
+      "minLength": 1,
+      "title": "Creative Brief",
+      "type": "string"
+    },
+    "current_outline": {
+      "minLength": 1,
+      "title": "Current Outline",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "story_bible": {
+      "minLength": 1,
+      "title": "Story Bible",
+      "type": "string"
+    },
+    "writing_rules": {
+      "minLength": 1,
+      "title": "Writing Rules",
+      "type": "string"
+    }
+  },
+  "required": [
+    "creative_brief",
+    "story_bible",
+    "writing_rules",
+    "current_outline"
+  ],
+  "title": "IntentContent",
+  "type": "object",
+  "x-schema-version": "1.0.0"
+}

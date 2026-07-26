@@ -1,0 +1,427 @@
+{
+  "$defs": {
+    "Assertion": {
+      "additionalProperties": false,
+      "description": "A scope's time-bounded stance toward a Proposition.",
+      "properties": {
+        "assertion_id": {
+          "format": "uuid",
+          "title": "Assertion Id",
+          "type": "string"
+        },
+        "certainty": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Certainty",
+          "type": "number"
+        },
+        "change_set_id": {
+          "format": "uuid",
+          "title": "Change Set Id",
+          "type": "string"
+        },
+        "holder_entity_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Holder Entity Id"
+        },
+        "proposition_id": {
+          "format": "uuid",
+          "title": "Proposition Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "scope": {
+          "$ref": "#/$defs/AssertionScope"
+        },
+        "source_ref_id": {
+          "format": "uuid",
+          "title": "Source Ref Id",
+          "type": "string"
+        },
+        "stance": {
+          "$ref": "#/$defs/AssertionStance"
+        },
+        "valid_from": {
+          "$ref": "#/$defs/StoryTime"
+        },
+        "valid_to": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StoryTime"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "assertion_id",
+        "proposition_id",
+        "scope",
+        "stance",
+        "certainty",
+        "valid_from",
+        "source_ref_id",
+        "change_set_id"
+      ],
+      "title": "Assertion",
+      "type": "object"
+    },
+    "AssertionScope": {
+      "enum": [
+        "objective",
+        "character",
+        "reader",
+        "narrator"
+      ],
+      "title": "AssertionScope",
+      "type": "string"
+    },
+    "AssertionStance": {
+      "enum": [
+        "true",
+        "false",
+        "unknown",
+        "suspected",
+        "claimed",
+        "disbelieved"
+      ],
+      "title": "AssertionStance",
+      "type": "string"
+    },
+    "ChangeSetOperationKind": {
+      "enum": [
+        "assert",
+        "retract",
+        "supersede",
+        "correct"
+      ],
+      "title": "ChangeSetOperationKind",
+      "type": "string"
+    },
+    "ObjectKind": {
+      "enum": [
+        "entity",
+        "value"
+      ],
+      "title": "ObjectKind",
+      "type": "string"
+    },
+    "Proposition": {
+      "additionalProperties": false,
+      "description": "A claim-shaped statement that intentionally carries no truth value.",
+      "properties": {
+        "object_entity_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Object Entity Id"
+        },
+        "object_kind": {
+          "$ref": "#/$defs/ObjectKind"
+        },
+        "object_value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Object Value"
+        },
+        "predicate": {
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9_.-]*$",
+          "title": "Predicate",
+          "type": "string"
+        },
+        "proposition_id": {
+          "format": "uuid",
+          "title": "Proposition Id",
+          "type": "string"
+        },
+        "qualifiers_json": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Qualifier"
+          },
+          "title": "Qualifiers Json",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "subject_entity_id": {
+          "format": "uuid",
+          "title": "Subject Entity Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "proposition_id",
+        "subject_entity_id",
+        "predicate",
+        "object_kind"
+      ],
+      "title": "Proposition",
+      "type": "object"
+    },
+    "Qualifier": {
+      "additionalProperties": false,
+      "description": "An immutable scalar qualifier attached to a proposition.",
+      "properties": {
+        "key": {
+          "minLength": 1,
+          "title": "Key",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "required": [
+        "key",
+        "value"
+      ],
+      "title": "Qualifier",
+      "type": "object"
+    },
+    "StoryTime": {
+      "additionalProperties": false,
+      "description": "A calendar-neutral position on a story timeline.\n\nNarrative order deliberately does not belong to this value object. It is a\nproperty of the scene or event through which readers encounter the event.",
+      "properties": {
+        "display_time": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Display Time"
+        },
+        "kind": {
+          "$ref": "#/$defs/StoryTimeKind"
+        },
+        "relative_offset": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Relative Offset"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "story_time_end": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Story Time End"
+        },
+        "story_time_start": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Story Time Start"
+        },
+        "time_anchor_event_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Time Anchor Event Id"
+        },
+        "timeline_id": {
+          "default": "main",
+          "minLength": 1,
+          "title": "Timeline Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "StoryTime",
+      "type": "object"
+    },
+    "StoryTimeKind": {
+      "enum": [
+        "exact",
+        "ordinal",
+        "relative",
+        "interval",
+        "unknown"
+      ],
+      "title": "StoryTimeKind",
+      "type": "string"
+    }
+  },
+  "$id": "https://novel.local/schemas/change-set-operation.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "One append-only operation against the Canon assertion history.",
+  "properties": {
+    "assertion": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Assertion"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "op": {
+      "$ref": "#/$defs/ChangeSetOperationKind"
+    },
+    "operation_id": {
+      "format": "uuid",
+      "title": "Operation Id",
+      "type": "string"
+    },
+    "proposition": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Proposition"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "reason": {
+      "minLength": 1,
+      "title": "Reason",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_ref_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Ref Id"
+    },
+    "target_assertion_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Target Assertion Id"
+    }
+  },
+  "required": [
+    "operation_id",
+    "op",
+    "reason"
+  ],
+  "title": "ChangeSetOperation",
+  "type": "object",
+  "x-schema-version": "1.0.0"
+}

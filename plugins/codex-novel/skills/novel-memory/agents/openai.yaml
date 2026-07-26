@@ -1,0 +1,7 @@
+interface:
+  display_name: "Novel Memory"
+  short_description: "Navigate summaries and read exact approved prose"
+  default_prompt: "Use $novel-memory to locate relevant Chapter/Scene summaries and read exact approved historical prose."
+
+policy:
+  allow_implicit_invocation: true

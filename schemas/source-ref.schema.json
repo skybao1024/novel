@@ -1,0 +1,61 @@
+{
+  "$id": "https://novel.local/schemas/source-ref.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "A revision-aware source pointer that survives ordinary text movement.",
+  "properties": {
+    "document_id": {
+      "format": "uuid",
+      "title": "Document Id",
+      "type": "string"
+    },
+    "document_revision": {
+      "minLength": 1,
+      "title": "Document Revision",
+      "type": "string"
+    },
+    "excerpt": {
+      "minLength": 1,
+      "title": "Excerpt",
+      "type": "string"
+    },
+    "fragment_ordinal": {
+      "minimum": 1,
+      "title": "Fragment Ordinal",
+      "type": "integer"
+    },
+    "quote_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Quote Hash",
+      "type": "string"
+    },
+    "scene_id": {
+      "format": "uuid",
+      "title": "Scene Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_ref_id": {
+      "format": "uuid",
+      "title": "Source Ref Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "source_ref_id",
+    "document_id",
+    "scene_id",
+    "document_revision",
+    "fragment_ordinal",
+    "quote_hash",
+    "excerpt"
+  ],
+  "title": "SourceRef",
+  "type": "object",
+  "x-schema-version": "1.0.0"
+}

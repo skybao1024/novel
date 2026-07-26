@@ -1,0 +1,69 @@
+{
+  "$defs": {
+    "EventEdgeType": {
+      "enum": [
+        "causes",
+        "enables",
+        "prevents",
+        "reveals",
+        "foreshadows",
+        "pays_off",
+        "contradicts"
+      ],
+      "title": "EventEdgeType",
+      "type": "string"
+    }
+  },
+  "$id": "https://novel.local/schemas/event-edge.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "A directed semantic relation between two distinct events.",
+  "properties": {
+    "edge_type": {
+      "$ref": "#/$defs/EventEdgeType"
+    },
+    "event_edge_id": {
+      "format": "uuid",
+      "title": "Event Edge Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_event_id": {
+      "format": "uuid",
+      "title": "Source Event Id",
+      "type": "string"
+    },
+    "source_ref_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Ref Id"
+    },
+    "target_event_id": {
+      "format": "uuid",
+      "title": "Target Event Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "event_edge_id",
+    "source_event_id",
+    "target_event_id",
+    "edge_type"
+  ],
+  "title": "EventEdge",
+  "type": "object",
+  "x-schema-version": "1.0.0"
+}

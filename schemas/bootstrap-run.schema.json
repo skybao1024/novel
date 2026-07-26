@@ -1,0 +1,351 @@
+{
+  "$defs": {
+    "Approval": {
+      "additionalProperties": false,
+      "properties": {
+        "approval_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Approval Digest",
+          "type": "string"
+        },
+        "approved_at": {
+          "format": "date-time",
+          "title": "Approved At",
+          "type": "string"
+        },
+        "operation_id": {
+          "format": "uuid",
+          "title": "Operation Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "operation_id",
+        "approval_digest",
+        "approved_at"
+      ],
+      "title": "Approval",
+      "type": "object"
+    },
+    "BootstrapContent": {
+      "additionalProperties": false,
+      "properties": {
+        "entity_resolutions": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/BootstrapEntityResolution"
+          },
+          "title": "Entity Resolutions",
+          "type": "array"
+        },
+        "initial_goal": {
+          "minLength": 1,
+          "title": "Initial Goal",
+          "type": "string"
+        },
+        "intent": {
+          "$ref": "#/$defs/IntentContent"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "unresolved_questions": {
+          "default": [],
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 64,
+          "title": "Unresolved Questions",
+          "type": "array"
+        }
+      },
+      "required": [
+        "intent",
+        "initial_goal"
+      ],
+      "title": "BootstrapContent",
+      "type": "object"
+    },
+    "BootstrapEntityResolution": {
+      "additionalProperties": false,
+      "properties": {
+        "entity": {
+          "$ref": "#/$defs/Entity"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "temporary_name": {
+          "minLength": 1,
+          "title": "Temporary Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "temporary_name",
+        "entity"
+      ],
+      "title": "BootstrapEntityResolution",
+      "type": "object"
+    },
+    "BootstrapStatus": {
+      "enum": [
+        "drafting",
+        "prepared",
+        "approved",
+        "applied"
+      ],
+      "title": "BootstrapStatus",
+      "type": "string"
+    },
+    "Entity": {
+      "additionalProperties": false,
+      "description": "A long-lived narrative object addressed only through an opaque UUID.",
+      "properties": {
+        "created_revision": {
+          "minLength": 1,
+          "title": "Created Revision",
+          "type": "string"
+        },
+        "display_name": {
+          "minLength": 1,
+          "title": "Display Name",
+          "type": "string"
+        },
+        "entity_id": {
+          "format": "uuid",
+          "title": "Entity Id",
+          "type": "string"
+        },
+        "entity_type": {
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9_-]*$",
+          "title": "Entity Type",
+          "type": "string"
+        },
+        "retired_revision": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Retired Revision"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/EntityStatus",
+          "default": "active"
+        }
+      },
+      "required": [
+        "entity_id",
+        "entity_type",
+        "display_name",
+        "created_revision"
+      ],
+      "title": "Entity",
+      "type": "object"
+    },
+    "EntityStatus": {
+      "enum": [
+        "active",
+        "retired"
+      ],
+      "title": "EntityStatus",
+      "type": "string"
+    },
+    "IntentContent": {
+      "additionalProperties": false,
+      "description": "The four authoritative, reviewable Intent Canon documents.",
+      "properties": {
+        "creative_brief": {
+          "minLength": 1,
+          "title": "Creative Brief",
+          "type": "string"
+        },
+        "current_outline": {
+          "minLength": 1,
+          "title": "Current Outline",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "story_bible": {
+          "minLength": 1,
+          "title": "Story Bible",
+          "type": "string"
+        },
+        "writing_rules": {
+          "minLength": 1,
+          "title": "Writing Rules",
+          "type": "string"
+        }
+      },
+      "required": [
+        "creative_brief",
+        "story_bible",
+        "writing_rules",
+        "current_outline"
+      ],
+      "title": "IntentContent",
+      "type": "object"
+    }
+  },
+  "$id": "https://novel.local/schemas/bootstrap-run.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "applied_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Applied At"
+    },
+    "approval": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Approval"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "approval_digest": {
+      "anyOf": [
+        {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Approval Digest"
+    },
+    "base_canon_revision": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Base Canon Revision",
+      "type": "string"
+    },
+    "base_intent_revision": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Base Intent Revision",
+      "type": "string"
+    },
+    "bootstrap_id": {
+      "format": "uuid",
+      "title": "Bootstrap Id",
+      "type": "string"
+    },
+    "content": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/BootstrapContent"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "content_digest": {
+      "anyOf": [
+        {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Content Digest"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "intent_diff": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Intent Diff"
+    },
+    "project_id": {
+      "format": "uuid",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "revision": {
+      "minimum": 0,
+      "title": "Revision",
+      "type": "integer"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "status": {
+      "$ref": "#/$defs/BootstrapStatus"
+    }
+  },
+  "required": [
+    "bootstrap_id",
+    "project_id",
+    "base_canon_revision",
+    "base_intent_revision",
+    "revision",
+    "status",
+    "created_at"
+  ],
+  "title": "BootstrapRun",
+  "type": "object",
+  "x-schema-version": "1.0.0"
+}

@@ -1,0 +1,53 @@
+{
+  "$defs": {
+    "DocumentKind": {
+      "enum": [
+        "manuscript",
+        "manual",
+        "structure"
+      ],
+      "title": "DocumentKind",
+      "type": "string"
+    }
+  },
+  "$id": "https://novel.local/schemas/document.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "A versioned Canon or structure document inside a novel project.",
+  "properties": {
+    "document_id": {
+      "format": "uuid",
+      "title": "Document Id",
+      "type": "string"
+    },
+    "document_kind": {
+      "$ref": "#/$defs/DocumentKind"
+    },
+    "relative_path": {
+      "minLength": 1,
+      "pattern": "^[^\\\\]+$",
+      "title": "Relative Path",
+      "type": "string"
+    },
+    "revision": {
+      "minLength": 1,
+      "title": "Revision",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "document_id",
+    "relative_path",
+    "document_kind",
+    "revision"
+  ],
+  "title": "Document",
+  "type": "object",
+  "x-schema-version": "1.0.0"
+}

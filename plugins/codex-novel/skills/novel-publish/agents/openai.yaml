@@ -1,0 +1,4 @@
+interface:
+  display_name: "Novel Publish"
+  short_description: "Prepare, approve, publish, and recover scenes"
+  default_prompt: "Use $novel-publish to prepare an exact scene publication and wait for digest approval."

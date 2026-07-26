@@ -1,0 +1,52 @@
+{
+  "$defs": {
+    "ProjectStatus": {
+      "description": "The minimum lifecycle state needed to select a local novel safely.",
+      "enum": [
+        "not_bootstrapped",
+        "ready"
+      ],
+      "title": "ProjectStatus",
+      "type": "string"
+    }
+  },
+  "$id": "https://novel.local/schemas/project-catalog-entry.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "One content-free project reference in the user-level Catalog.",
+  "properties": {
+    "project_id": {
+      "format": "uuid",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "project_path": {
+      "minLength": 1,
+      "title": "Project Path",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "status": {
+      "$ref": "#/$defs/ProjectStatus"
+    },
+    "title": {
+      "minLength": 1,
+      "title": "Title",
+      "type": "string"
+    }
+  },
+  "required": [
+    "project_id",
+    "title",
+    "project_path",
+    "status"
+  ],
+  "title": "ProjectCatalogEntry",
+  "type": "object",
+  "x-schema-version": "1.0.0"
+}

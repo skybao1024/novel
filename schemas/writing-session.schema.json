@@ -1,0 +1,306 @@
+{
+  "$defs": {
+    "StoryTime": {
+      "additionalProperties": false,
+      "description": "A calendar-neutral position on a story timeline.\n\nNarrative order deliberately does not belong to this value object. It is a\nproperty of the scene or event through which readers encounter the event.",
+      "properties": {
+        "display_time": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Display Time"
+        },
+        "kind": {
+          "$ref": "#/$defs/StoryTimeKind"
+        },
+        "relative_offset": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Relative Offset"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "story_time_end": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Story Time End"
+        },
+        "story_time_start": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Story Time Start"
+        },
+        "time_anchor_event_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Time Anchor Event Id"
+        },
+        "timeline_id": {
+          "default": "main",
+          "minLength": 1,
+          "title": "Timeline Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "StoryTime",
+      "type": "object"
+    },
+    "StoryTimeKind": {
+      "enum": [
+        "exact",
+        "ordinal",
+        "relative",
+        "interval",
+        "unknown"
+      ],
+      "title": "StoryTimeKind",
+      "type": "string"
+    },
+    "WritingSessionStatus": {
+      "enum": [
+        "open",
+        "closed"
+      ],
+      "title": "WritingSessionStatus",
+      "type": "string"
+    }
+  },
+  "$id": "https://novel.local/schemas/writing-session.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "after_scene_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "After Scene Id"
+    },
+    "author_goal": {
+      "minLength": 1,
+      "title": "Author Goal",
+      "type": "string"
+    },
+    "base_canon_revision": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Base Canon Revision",
+      "type": "string"
+    },
+    "base_document_revision": {
+      "anyOf": [
+        {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Base Document Revision"
+    },
+    "base_intent_revision": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Base Intent Revision",
+      "type": "string"
+    },
+    "before_scene_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Before Scene Id"
+    },
+    "closed_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Closed At"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "creative_constraints": {
+      "default": [],
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxItems": 64,
+      "title": "Creative Constraints",
+      "type": "array"
+    },
+    "location_entity_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Location Entity Id"
+    },
+    "pov_entity_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Pov Entity Id"
+    },
+    "project_id": {
+      "format": "uuid",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "status": {
+      "$ref": "#/$defs/WritingSessionStatus"
+    },
+    "target_chapter_id": {
+      "format": "uuid",
+      "title": "Target Chapter Id",
+      "type": "string"
+    },
+    "target_chapter_number": {
+      "minimum": 1,
+      "title": "Target Chapter Number",
+      "type": "integer"
+    },
+    "target_chapter_title": {
+      "minLength": 1,
+      "title": "Target Chapter Title",
+      "type": "string"
+    },
+    "target_document_id": {
+      "format": "uuid",
+      "title": "Target Document Id",
+      "type": "string"
+    },
+    "target_document_path": {
+      "minLength": 1,
+      "title": "Target Document Path",
+      "type": "string"
+    },
+    "target_narrative_order": {
+      "minimum": 1,
+      "title": "Target Narrative Order",
+      "type": "integer"
+    },
+    "target_scene_id": {
+      "format": "uuid",
+      "title": "Target Scene Id",
+      "type": "string"
+    },
+    "target_story_time": {
+      "$ref": "#/$defs/StoryTime"
+    },
+    "writing_session_id": {
+      "format": "uuid",
+      "title": "Writing Session Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "writing_session_id",
+    "project_id",
+    "target_scene_id",
+    "target_document_id",
+    "target_document_path",
+    "target_chapter_id",
+    "target_chapter_number",
+    "target_chapter_title",
+    "target_narrative_order",
+    "target_story_time",
+    "base_canon_revision",
+    "base_intent_revision",
+    "author_goal",
+    "status",
+    "created_at"
+  ],
+  "title": "WritingSession",
+  "type": "object",
+  "x-schema-version": "1.0.0"
+}
