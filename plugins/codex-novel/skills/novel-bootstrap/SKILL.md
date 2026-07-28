@@ -1,6 +1,6 @@
 ---
 name: novel-bootstrap
-description: Initialize an empty local Novel project or prepare a later Intent Revision through the formal CLI approval boundary. Use when an author wants to turn a discussed premise, Story Bible, writing rules, or outline into approved Intent Canon, or explicitly revise those files later.
+description: Create or initialize a local Novel project with project-scoped Codex guidance, or prepare a later Intent Revision through the formal CLI approval boundary. Use when an author wants to create a new novel, turn a discussed premise, Story Bible, writing rules, or outline into approved Intent Canon, or explicitly revise those files later.
 ---
 
 # Novel Bootstrap
@@ -10,13 +10,31 @@ the Application installs them as Intent Canon only after approval.
 
 ## New project
 
-1. Resolve one explicit project and run `novel --project <root> doctor --json`.
-2. Run `novel --project <root> bootstrap start --json`.
-3. Discuss the novel with the author. Prepare four non-empty UTF-8 files: Creative Brief,
+1. If the project does not exist, choose one explicit root with the author and run:
+
+   ```text
+   novel project create <root> --title <title> [--language <tag>] --json
+   ```
+
+2. After `project create` succeeds, install this Skill's project guidance:
+
+   ```text
+   python3 <this-skill-directory>/scripts/install_project_agents.py --project <root>
+   ```
+
+   This helper only creates root `AGENTS.md`; it does not write Novel business data. It is
+   idempotent for the bundled template and refuses to overwrite different existing guidance.
+   If the project already exists with status `not_bootstrapped` and has no root `AGENTS.md`, run
+   the same helper before starting Bootstrap. Report a conflicting existing file instead of
+   replacing it. The new guidance applies to future Codex runs; keep following this Skill in the
+   current run.
+3. Resolve that exact project and run `novel --project <root> doctor --json`.
+4. Run `novel --project <root> bootstrap start --json`.
+5. Discuss the novel with the author. Prepare four non-empty UTF-8 files: Creative Brief,
    Story Bible, Writing Rules, and Current Outline. Optionally prepare a versioned JSON array of
    Bootstrap Entity drafts containing only temporary name, type, and display name; the
    Application allocates their stable IDs before approval.
-4. Save the candidate:
+6. Save the candidate:
 
    ```text
    novel --project <root> bootstrap save \
@@ -26,9 +44,9 @@ the Application installs them as Intent Canon only after approval.
      --initial-goal <goal> --json
    ```
 
-5. Run `bootstrap inspect`. Show the exact Diff, stable IDs, unresolved questions, and approval
+7. Run `bootstrap inspect`. Show the exact Diff, stable IDs, unresolved questions, and approval
    digest. Stop and wait for the author.
-6. Only after the author explicitly approves that exact digest, call `bootstrap approve` with
+8. Only after the author explicitly approves that exact digest, call `bootstrap approve` with
    `--bootstrap-id` and `--approval-digest`, then call `bootstrap apply`.
 
 Do not treat “continue”, ordinary feedback, or approval of another revision as authorization.

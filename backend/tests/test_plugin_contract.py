@@ -1,13 +1,18 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 from pathlib import Path
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 PLUGIN_ROOT = REPOSITORY_ROOT / "plugins" / "codex-novel"
 MEMORY_SKILL_ROOT = PLUGIN_ROOT / "skills" / "novel-memory"
+BOOTSTRAP_SKILL_ROOT = PLUGIN_ROOT / "skills" / "novel-bootstrap"
 CREATION_SKILLS = {
     "novel-bootstrap": (
+        "project create",
+        "install_project_agents.py",
         "bootstrap start",
         "bootstrap approve",
         "intent prepare",
@@ -37,10 +42,12 @@ def test_plugin_manifest_and_repo_marketplace_are_installable_contracts() -> Non
     )
 
     assert manifest["name"] == "codex-novel"
-    assert manifest["version"] == "0.4.0"
+    assert manifest["version"].split("+", maxsplit=1)[0] == "0.4.0"
     assert manifest["skills"] == "./skills/"
+    assert "project-scoped Codex boundaries" in manifest["interface"]["longDescription"]
     assert "publishes immutable Draft revisions" in manifest["interface"]["longDescription"]
     assert "compatib" not in manifest["interface"]["longDescription"].lower()
+    assert "create guided projects" in manifest["interface"]["defaultPrompt"][0]
     assert "explicit project and digest boundaries" in manifest["interface"]["defaultPrompt"][0]
     assert "mcpServers" not in manifest
     assert "apps" not in manifest
@@ -96,9 +103,74 @@ def test_plugin_exposes_creation_loop_and_ai_first_memory_skills() -> None:
         assert "directly" in body
         for phrase in required_phrases:
             assert phrase in body
-        assert {path.name for path in skill_root.iterdir()} == {"SKILL.md", "agents"}
+        expected_entries = {"SKILL.md", "agents"}
+        if skill_name == "novel-bootstrap":
+            expected_entries.update({"assets", "scripts"})
+        assert {path.name for path in skill_root.iterdir()} == expected_entries
         metadata = (skill_root / "agents" / "openai.yaml").read_text(encoding="utf-8")
         assert f"${skill_name}" in metadata
+
+
+def test_bootstrap_project_guidance_captures_codex_boundaries() -> None:
+    guidance = (BOOTSTRAP_SKILL_ROOT / "assets" / "project-AGENTS.md").read_text(encoding="utf-8")
+
+    assert guidance.startswith("# Novel Project Guidance\n")
+    assert "Read and verify `novel.yaml`" in guidance
+    assert "Use `novel` as the only business-data interface." in guidance
+    assert "Never directly edit formal `intent/`" in guidance
+    assert "exact operation ID and approval digest" in guidance
+    assert "missing structured Canon does not prove" in guidance
+    assert "approved manuscript prose as the primary source" in guidance
+
+
+def test_project_guidance_installer_is_idempotent_and_never_overwrites(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "story"
+    project.mkdir()
+    (project / "novel.yaml").write_text("schema_version: 1.0.0\n", encoding="utf-8")
+
+    created = _install_project_guidance(project)
+    destination = project / "AGENTS.md"
+    template = BOOTSTRAP_SKILL_ROOT / "assets" / "project-AGENTS.md"
+    assert created.returncode == 0
+    assert created.stdout.startswith("created:")
+    assert destination.read_bytes() == template.read_bytes()
+
+    unchanged = _install_project_guidance(project)
+    assert unchanged.returncode == 0
+    assert unchanged.stdout.startswith("unchanged:")
+
+    destination.write_text("# Author guidance\n", encoding="utf-8")
+    refused = _install_project_guidance(project)
+    assert refused.returncode == 3
+    assert "refusing to overwrite existing guidance" in refused.stderr
+    assert destination.read_text(encoding="utf-8") == "# Author guidance\n"
+
+
+def test_project_guidance_installer_requires_a_novel_manifest(tmp_path: Path) -> None:
+    project = tmp_path / "not-a-novel"
+    project.mkdir()
+
+    result = _install_project_guidance(project)
+
+    assert result.returncode == 2
+    assert "cannot find Novel manifest" in result.stderr
+    assert not (project / "AGENTS.md").exists()
+
+
+def _install_project_guidance(project: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [
+            sys.executable,
+            str(BOOTSTRAP_SKILL_ROOT / "scripts" / "install_project_agents.py"),
+            "--project",
+            str(project),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
 
 
 def _frontmatter(content: str) -> tuple[dict[str, str], str]:

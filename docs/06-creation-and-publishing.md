@@ -13,6 +13,11 @@
 - 初始 SQLite 投影；
 - Project Catalog 记录。
 
+当创建动作由 Codex Plugin 组织时，Bootstrap Skill 随后从插件固定模板安装项目根
+`AGENTS.md`，使后续 Codex 运行持续遵守项目选择、Skill 路由、正式数据和准确批准边界。
+该文件不是 Intent Canon，也不由 Application/Core 生成；已有不同内容时 Plugin 必须保留
+原文件并报告冲突。
+
 空项目状态不能被当作已经具备创作环境。
 
 ### 1.2 建立 Bootstrap Run

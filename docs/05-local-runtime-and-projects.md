@@ -73,6 +73,11 @@ novel project remove --project-id <uuid>
 Manifest 并维护 Catalog 引用；`project remove` 不读取或删除项目资产。不存在旧的
 `novel init` 兼容入口。
 
+通过 Codex Plugin 创建新小说时，Bootstrap Skill 在 `project create` 成功后，另行从插件
+固定模板创建项目根 `AGENTS.md`。该文件用于让后续 Codex 运行自动继承项目选择、CLI
+业务边界和准确 Digest 批准规则，不改变 `project create` 的通用 CLI 契约。安装操作必须
+校验根目录存在 `novel.yaml`，相同模板可以幂等复用，已有不同 `AGENTS.md` 时不得覆盖。
+
 ## 4. CLI 协议
 
 机器调用使用一个版本化 JSON Envelope：

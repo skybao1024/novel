@@ -87,12 +87,14 @@ CLI 不承载领域规则，也不直接写业务表或正式项目文件。
 Plugin 由围绕正规创作流程的 Skills 组成：
 
 - 项目选择与 Bootstrap；
+- 新项目的 Codex 项目级工作边界；
 - Writing Session 与历史导航；
 - Draft 与 Review；
 - Publish 准备和批准边界。
 
 Skill 只能通过 CLI 执行业务动作，不能直接修改 SQLite、Ledger、正式正文、摘要或运行
-记录。
+记录。Bootstrap Skill 可以从插件内的固定模板创建项目根 `AGENTS.md`；该文件只约束
+Codex 行为，不属于小说业务数据，且不得覆盖作者已有的不同项目指令。
 
 ## 3. 服务边界
 

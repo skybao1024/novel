@@ -1,4 +1,4 @@
 interface:
   display_name: "Novel Bootstrap"
-  short_description: "Initialize and revise approved novel intent"
-  default_prompt: "Use $novel-bootstrap to prepare and approve a local novel creation environment."
+  short_description: "Create guided projects and approve novel intent"
+  default_prompt: "Use $novel-bootstrap to create a guided local novel project, then prepare and approve its Intent."

@@ -48,12 +48,14 @@ Codex 不直接修改 SQLite、Canon Ledger、正式正文或批准状态。
 Plugin 负责：
 
 - 识别当前小说和当前创作任务；
+- 在新项目建立后安装随项目生效的精简 `AGENTS.md`，声明 Codex 工作和批准边界；
 - 引导 Codex 调用正确的 CLI 命令；
 - 保持 Writer、Reviewer 和发布批准的角色边界；
 - 遇到版本、引用、锁或协议错误时停止对应写操作；
 - 不把提示策略复制成领域规则。
 
-Plugin 不独立保存业务数据，也不绕过 CLI 写项目文件。
+Plugin 可以从自身模板创建 Codex 专用的项目根 `AGENTS.md`，但不独立保存业务数据，也不
+绕过 CLI 写正式 Intent、正文、导航记忆、Ledger 或运行产物。
 
 ### 2.4 Application 与 Core
 
