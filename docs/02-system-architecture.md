@@ -66,6 +66,7 @@ Adapters 实现：
 - Canon Ledger；
 - SQLite projection 与摘要 FTS；
 - 项目锁；
+- 应用数据目录中的脱敏 CLI 诊断日志；
 - 正式正文的原子安装和事务恢复记录。
 
 SQLite 是投影和必要运行索引，不拥有小说的唯一事实。
@@ -78,9 +79,11 @@ CLI 是 Codex Plugin、开发者和本地应用共同使用的稳定协议边界
 - 项目选择；
 - Application 服务装配；
 - JSON Envelope；
+- CLI 调用关联 ID、阶段和错误分类；
 - 错误到稳定 code/exit code 的映射。
 
 CLI 不承载领域规则，也不直接写业务表或正式项目文件。
+诊断日志不是业务事实、审批证据或恢复依据。
 
 ### 2.5 Codex Plugin
 
@@ -94,7 +97,9 @@ Plugin 由围绕正规创作流程的 Skills 组成：
 
 Skill 只能通过 CLI 执行业务动作，不能直接修改 SQLite、Ledger、正式正文、摘要或运行
 记录。Bootstrap Skill 可以从插件内的固定模板创建项目根 `AGENTS.md`；该文件只约束
-Codex 行为，不属于小说业务数据，且不得覆盖作者已有的不同项目指令。
+Codex 行为，不属于小说业务数据，且不得覆盖作者已有的不同项目指令。Novel Skills 在
+选择准确项目后显式读取该文件，不依赖工作区启动时的递归发现，也不要求作者为子目录小说
+切换工作区或新建会话。
 
 ## 3. 服务边界
 
@@ -147,7 +152,10 @@ Application 不向 AI 输出一个声称完备的固定上下文包。它提供�
 3. 准确且带 revision 的正文；
 4. 实际返回来源的自动记录。
 
-AI 决定查询顺序、查询次数和停止时机。
+Plugin 要求 Codex 在当前运行首次起草前至少读取紧邻的批准 Scene 完整原文；新 Chapter
+还要检查上一 Chapter Summary 和最后一个批准 Scene 完整原文，并在直接衔接未结束时扩展
+读取。除此之外，AI 决定查询顺序、查询次数和停止时机。Application 不把这项 Plugin 行为
+规则实现为查询次数或摘要完整度门槛。
 
 ## 6. 本地技术基线
 

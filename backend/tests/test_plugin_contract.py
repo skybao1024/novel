@@ -31,6 +31,19 @@ CREATION_SKILLS = {
         "approval_digest",
     ),
 }
+PROJECT_CONTRACT_PHRASES = (
+    "<root>/AGENTS.md",
+    "current task",
+    "Codex workspace",
+    "current directory is a parent",
+    "only to operations bound to that project's",
+    "switch workspaces or start a new thread",
+)
+DIAGNOSTIC_PHRASES = (
+    "diagnostic_id",
+    "diagnostics show --diagnostic-id",
+    "operational evidence",
+)
 
 
 def test_plugin_manifest_and_repo_marketplace_are_installable_contracts() -> None:
@@ -40,15 +53,17 @@ def test_plugin_manifest_and_repo_marketplace_are_installable_contracts() -> Non
     marketplace = json.loads(
         (REPOSITORY_ROOT / ".agents" / "plugins" / "marketplace.json").read_text(encoding="utf-8")
     )
+    long_description = manifest["interface"]["longDescription"]
+    default_prompt = manifest["interface"]["defaultPrompt"][0]
 
     assert manifest["name"] == "codex-novel"
     assert manifest["version"].split("+", maxsplit=1)[0] == "0.4.0"
     assert manifest["skills"] == "./skills/"
-    assert "project-scoped Codex boundaries" in manifest["interface"]["longDescription"]
-    assert "publishes immutable Draft revisions" in manifest["interface"]["longDescription"]
-    assert "compatib" not in manifest["interface"]["longDescription"].lower()
-    assert "create guided projects" in manifest["interface"]["defaultPrompt"][0]
-    assert "explicit project and digest boundaries" in manifest["interface"]["defaultPrompt"][0]
+    assert "loads the selected project's Codex boundaries in place" in long_description
+    assert "publishes immutable Draft revisions" in long_description
+    assert "compatib" not in long_description.lower()
+    assert "load the selected project contract in place" in default_prompt
+    assert "explicit project and digest boundaries" in default_prompt
     assert "mcpServers" not in manifest
     assert "apps" not in manifest
     assert "hooks" not in manifest
@@ -71,6 +86,7 @@ def test_plugin_exposes_creation_loop_and_ai_first_memory_skills() -> None:
 
     content = (MEMORY_SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
     frontmatter, body = _frontmatter(content)
+    normalized_body = " ".join(body.split())
 
     assert frontmatter["name"] == "novel-memory"
     assert "AI-first" in frontmatter["description"]
@@ -83,6 +99,10 @@ def test_plugin_exposes_creation_loop_and_ai_first_memory_skills() -> None:
     assert "candidate location only" in body
     assert "Never query SQLite" in body
     assert "Never infer that missing or stale summaries" in body
+    for phrase in PROJECT_CONTRACT_PHRASES:
+        assert phrase in normalized_body
+    for phrase in DIAGNOSTIC_PHRASES:
+        assert phrase in normalized_body
 
     assert {path.name for path in MEMORY_SKILL_ROOT.iterdir()} == {
         "SKILL.md",
@@ -97,18 +117,51 @@ def test_plugin_exposes_creation_loop_and_ai_first_memory_skills() -> None:
         skill_root = PLUGIN_ROOT / "skills" / skill_name
         content = (skill_root / "SKILL.md").read_text(encoding="utf-8")
         frontmatter, body = _frontmatter(content)
+        normalized_body = " ".join(body.split())
         assert frontmatter["name"] == skill_name
         assert "Use when" in frontmatter["description"]
         assert "[TODO:" not in content
         assert "directly" in body
         for phrase in required_phrases:
             assert phrase in body
+        for phrase in PROJECT_CONTRACT_PHRASES:
+            assert phrase in normalized_body
+        for phrase in DIAGNOSTIC_PHRASES:
+            assert phrase in normalized_body
         expected_entries = {"SKILL.md", "agents"}
         if skill_name == "novel-bootstrap":
             expected_entries.update({"assets", "scripts"})
         assert {path.name for path in skill_root.iterdir()} == expected_entries
         metadata = (skill_root / "agents" / "openai.yaml").read_text(encoding="utf-8")
         assert f"${skill_name}" in metadata
+
+
+def test_bootstrap_does_not_require_a_restart_to_activate_project_guidance() -> None:
+    content = (BOOTSTRAP_SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
+
+    assert "Immediately read the created file" in content
+    assert "guidance applies to future Codex runs" not in content
+
+
+def test_writing_skill_requires_exact_adjacent_prose_before_drafting() -> None:
+    skill_root = PLUGIN_ROOT / "skills" / "novel-writing"
+    content = (skill_root / "SKILL.md").read_text(encoding="utf-8")
+    normalized_content = " ".join(content.split())
+    metadata = (skill_root / "agents" / "openai.yaml").read_text(encoding="utf-8")
+
+    assert "### Continuity floor" in content
+    assert "Before drafting prose or saving the first Draft Revision" in normalized_content
+    assert "If `before_scene_id` exists, always" in normalized_content
+    assert "immediately preceding approved Scene" in normalized_content
+    assert "Neither its Scene Summary" in normalized_content
+    assert "Do not draft until this required exact read succeeds" in normalized_content
+    assert "When the target opens a new Chapter" in normalized_content
+    assert "preceding Chapter Summary" in normalized_content
+    assert "final approved Scene in full" in normalized_content
+    assert "action, dialogue exchange, emotional beat" in normalized_content
+    assert "first Scene in Narrative Order" in normalized_content
+    assert "Plugin writing rule, not an Application query-count gate" in normalized_content
+    assert "recover adjacent approved prose" in metadata
 
 
 def test_bootstrap_project_guidance_captures_codex_boundaries() -> None:

@@ -36,6 +36,11 @@ from novel_core import (
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "minimal_continuity.json"
 
 
+@pytest.fixture(autouse=True)
+def isolated_novel_application_data(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("NOVEL_APP_DATA_DIR", str(tmp_path / "novel-app-data"))
+
+
 def from_mapping(model: type[Any], value: dict[str, Any]) -> Any:
     return model.model_validate_json(json.dumps(value, ensure_ascii=False))
 

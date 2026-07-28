@@ -16,7 +16,8 @@
 当创建动作由 Codex Plugin 组织时，Bootstrap Skill 随后从插件固定模板安装项目根
 `AGENTS.md`，使后续 Codex 运行持续遵守项目选择、Skill 路由、正式数据和准确批准边界。
 该文件不是 Intent Canon，也不由 Application/Core 生成；已有不同内容时 Plugin 必须保留
-原文件并报告冲突。
+原文件并报告冲突。Skill 安装后立即读取该契约；以后其他 Novel Skill 也在解析出准确
+Project 后主动读取，因此小说位于当前工作区子目录时不要求作者切换工作区或新建会话。
 
 空项目状态不能被当作已经具备创作环境。
 
@@ -105,6 +106,11 @@ Application 为新 Scene 生成稳定 ID。目标位置必须明确：
 
 之后 Codex 自主进行摘要搜索、原文读取和 Canon 查询。所有 Session 查询自动记录
 `retrieved_sources`。
+
+Plugin 要求 Codex 在当前运行首次起草正文前执行连续性的最低读取：存在前一个批准 Scene
+时必须读取其完整原文；新 Chapter 还要检查上一 Chapter Summary，并读取其最后一个批准
+Scene 的完整原文；直接动作、对话、情绪或其他衔接跨越更多 Scene 时继续扩展读取。该规则
+不下沉为 Application 的查询次数门槛，摘要缺失或 stale 也不能替代或免除所需原文读取。
 
 ## 4. Draft Revision
 
@@ -264,7 +270,7 @@ Plugin 在一次完整创作中：
 1. 解析明确 Project；
 2. 建立或恢复 Writing Session；
 3. 获取 Creation Context；
-4. 按需查询历史；
+4. 执行连续性最低读取并按需扩展历史查询；
 5. 保存 Draft Revision；
 6. 以 Reviewer 角色审核并继续查询；
 7. 保存修订稿；

@@ -17,6 +17,15 @@ from novel_adapters.filesystem.creation import (
     FilesystemWritingRunStore,
     RunSourceSnapshot,
 )
+from novel_adapters.filesystem.diagnostics import (
+    DIAGNOSTIC_RETENTION_DAYS,
+    DIAGNOSTIC_SCHEMA_VERSION,
+    DiagnosticLogWriteError,
+    DiagnosticOutcome,
+    DiagnosticRecord,
+    DiagnosticRecordNotFoundError,
+    FilesystemDiagnosticLog,
+)
 from novel_adapters.filesystem.manuscript import FilesystemManuscriptStore
 from novel_adapters.filesystem.navigation import (
     FilesystemNavigationStore,
@@ -32,10 +41,17 @@ from novel_adapters.filesystem.project import (
 __all__ = [
     "APP_DATA_ENVIRONMENT_VARIABLE",
     "CATALOG_FILENAME",
+    "DIAGNOSTIC_RETENTION_DAYS",
+    "DIAGNOSTIC_SCHEMA_VERSION",
+    "DiagnosticLogWriteError",
+    "DiagnosticOutcome",
+    "DiagnosticRecord",
+    "DiagnosticRecordNotFoundError",
     "FilesystemCanonLedgerStore",
     "FilesystemBootstrapRunStore",
     "FilesystemIntentRevisionStore",
     "FilesystemIntentStore",
+    "FilesystemDiagnosticLog",
     "FilesystemManuscriptStore",
     "FilesystemNavigationStore",
     "FilesystemProjectCatalogStore",

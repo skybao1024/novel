@@ -32,6 +32,15 @@ Writing Session 建立后，Application 返回一个 Creation Context：
 
 Creation Context 是确定性的起始视图，不声称包含全部相关历史，不作为写作许可。
 
+Plugin 在此起点上执行连续性的最低读取规则：只要存在前一个批准 Scene，Codex 在当前运行
+首次起草正文前必须通过 Exact Scene Read 读取其完整原文，摘要和
+`previous_scene_text_available` 不能替代该次读取。新 Chapter 还要检查上一 Chapter
+Summary，并读取其最后一个批准 Scene；如果动作、对话、情绪或其他直接衔接跨越更多
+Scene，则继续读取相关原文。只有全书第一个 Scene 没有前文可读。
+
+这是 Codex 的工作流约束，不是 Application 的查询次数门槛。Application 仍不以读取次数
+判断语义是否充分或拒绝 Draft。
+
 ## 3. 分层导航
 
 默认导航路线：

@@ -77,6 +77,9 @@ Manifest 并维护 Catalog 引用；`project remove` 不读取或删除项目资
 固定模板创建项目根 `AGENTS.md`。该文件用于让后续 Codex 运行自动继承项目选择、CLI
 业务边界和准确 Digest 批准规则，不改变 `project create` 的通用 CLI 契约。安装操作必须
 校验根目录存在 `novel.yaml`，相同模板可以幂等复用，已有不同 `AGENTS.md` 时不得覆盖。
+当 Codex 工作区位于多个小说的共同父目录时，执行中的 Novel Skill 根据已经解析的准确
+Project 根显式读取该文件，并把契约限定到同一 Manifest 和 Project ID；用户无需切换
+工作区或重开会话。
 
 ## 4. CLI 协议
 
@@ -85,6 +88,7 @@ Manifest 并维护 Catalog 引用；`project remove` 不读取或删除项目资
 ```json
 {
   "protocol_version": "1.0",
+  "diagnostic_id": "57cbcd4a-7dde-4c2e-89d6-248d880b43d9",
   "ok": true,
   "command": "session show",
   "data": {},
@@ -97,6 +101,7 @@ Manifest 并维护 Catalog 引用；`project remove` 不读取或删除项目资
 ```json
 {
   "protocol_version": "1.0",
+  "diagnostic_id": "a28f6af5-8410-4b92-bec4-8302180d719f",
   "ok": false,
   "command": "publish apply",
   "error": {
@@ -112,12 +117,48 @@ Manifest 并维护 Catalog 引用；`project remove` 不读取或删除项目资
 - 诊断信息写 stderr；
 - error code 和 exit code 是 Plugin 协议；
 - 人类输出不改变机器字段语义；
+- 成功和失败响应都返回已持久化的 `diagnostic_id`；
 - 写命令返回 Project ID、操作 ID 和结果 revision。
 
-## 5. 命令族
+如果诊断目录不可写，业务命令仍按原结果完成；响应通过 warning 报告诊断记录未写入，且
+不返回一个无法查询的虚假 `diagnostic_id`。
+
+## 5. CLI 诊断日志
+
+CLI 在用户应用数据目录的 `diagnostics/` 下按 UTC 日期追加脱敏 JSONL：
+
+```text
+diagnostics/cli-YYYY-MM-DD.jsonl
+```
+
+每条记录包含：
+
+- `diagnostic_id`、协议版本、命令名；
+- 开始、结束、耗时和退出码；
+- 已解析的 Project ID 与 Session、Draft、Publication 等稳定操作 ID；
+- 失败时所在阶段、稳定 error code 和异常类型；
+- 仅对未分类的 `internal_error` 保存不含局部变量和异常消息的 Python 调用栈。
+
+诊断记录不得保存正文、Prompt、Review 文本、检索词、审批 Digest 或完整 CLI 参数。它只
+用于运行排障，不参与项目状态、审批、发布恢复或 SQLite 重建。日志默认保留最近 30 个
+UTC 日期分区。
+
+正式查询入口为：
+
+```text
+novel diagnostics list [--project-id <uuid>] [--outcome success|error] [--limit <n>]
+novel diagnostics show --diagnostic-id <uuid>
+```
+
+`diagnostics list` 不返回调用栈；只有按准确 ID 调用 `diagnostics show` 才返回完整记录。
+Project 尚未解析就失败的调用可能没有 Project ID，但仍可通过响应中的 `diagnostic_id`
+查询。
+
+## 6. 命令族
 
 ```text
 novel project list|create|add|show|remove
+novel diagnostics list|show
 novel bootstrap start|save|inspect|approve|apply
 novel intent show|prepare|inspect|approve|apply
 novel session start|show|context|close
@@ -142,7 +183,7 @@ Session 模式的 `memory`、`resolve` 和 `query` 调用携带 `--session-id`�
 Session 中保存的 Narrative Order 边界并自动写入 `retrieved_sources`；不能通过临时换一个
 `--before-scene` 绕过 Session 边界。
 
-## 6. 项目锁与并发
+## 7. 项目锁与并发
 
 - 多个读取可以并行。
 - 每个项目同一时间只有一个写事务。
@@ -152,7 +193,7 @@ Session 中保存的 Narrative Order 边界并自动写入 `retrieved_sources`�
 - 锁内重新读取 Manifest、Ledger 和目标文件 revision。
 - 不同小说使用不同锁，可以同时创作。
 
-## 7. 投影与恢复
+## 8. 投影与恢复
 
 `.novel/project.sqlite` 是可重建投影。
 
@@ -173,7 +214,7 @@ Session 中保存的 Narrative Order 边界并自动写入 `retrieved_sources`�
 `rebuild` 从 Manifest、Intent、Ledger、Chapter、Summary 和运行记录重建新数据库，完成
 校验后再安装。重建失败不能修改权威文件。
 
-## 8. 运行产物和清理
+## 9. 运行产物和清理
 
 每个 Run 使用稳定 ID 独立目录。不可变 Draft、Review、Diff、批准和事务记录不得被同 ID
 覆盖。
@@ -181,7 +222,7 @@ Session 中保存的 Narrative Order 边界并自动写入 `retrieved_sources`�
 允许清理的仅是明确可重建的临时文件。未发布草稿和 Review 是用户创作资产，不能作为
 普通缓存删除。
 
-## 9. 安装与项目数据分离
+## 10. 安装与项目数据分离
 
 程序安装目录只包含运行时、Schema、SQL 和 Plugin 资源。小说项目保存在用户选择的位置。
 
@@ -194,7 +235,7 @@ Session 中保存的 Narrative Order 边界并自动写入 `retrieved_sources`�
 - SQLite 丢失不影响权威记录；
 - 中文、空格和非默认磁盘路径可用。
 
-## 10. 健康标准
+## 11. 健康标准
 
 一个项目只有在以下条件满足时才报告可创作：
 

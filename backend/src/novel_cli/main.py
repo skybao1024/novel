@@ -5,16 +5,27 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import traceback as traceback_module
+from dataclasses import dataclass
+from dataclasses import field as dataclass_field
+from datetime import UTC, datetime
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
+from time import perf_counter_ns
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from pydantic import TypeAdapter, ValidationError
 
 from novel_adapters.filesystem import (
+    DIAGNOSTIC_RETENTION_DAYS,
+    DIAGNOSTIC_SCHEMA_VERSION,
+    DiagnosticOutcome,
+    DiagnosticRecord,
+    DiagnosticRecordNotFoundError,
     FilesystemBootstrapRunStore,
     FilesystemCanonLedgerStore,
+    FilesystemDiagnosticLog,
     FilesystemIntentRevisionStore,
     FilesystemIntentStore,
     FilesystemManuscriptStore,
@@ -111,32 +122,127 @@ class EnvelopeArgumentParser(argparse.ArgumentParser):
         raise CliUsageError(message)
 
 
+@dataclass
+class _DiagnosticContext:
+    phase: str = "parse_arguments"
+    project_id: UUID | None = None
+    operation_ids: dict[str, tuple[str, ...]] = dataclass_field(default_factory=dict)
+
+    def bind_arguments(self, args: argparse.Namespace) -> None:
+        if args.project_id is not None:
+            self.project_id = args.project_id
+        for name in (
+            "bootstrap_id",
+            "intent_revision_id",
+            "session_id",
+            "draft_revision",
+            "review_id",
+            "publication_id",
+            "chapter_id",
+            "scene_id",
+            "character_id",
+            "event_id",
+            "source_ref_id",
+        ):
+            value = getattr(args, name, None)
+            if value is None:
+                continue
+            values = value if isinstance(value, list) else (value,)
+            self.operation_ids[name] = tuple(str(item) for item in values)
+
+    def bind_result(self, data: Any) -> None:
+        if self.project_id is not None or not isinstance(data, dict):
+            return
+        value = data.get("project_id")
+        if value is None:
+            return
+        try:
+            self.project_id = UUID(str(value))
+        except ValueError:
+            return
+
+
 def main(argv: list[str] | None = None) -> int:
     arguments = list(sys.argv[1:] if argv is None else argv)
     machine = "--json" in arguments
     arguments = [item for item in arguments if item != "--json"]
+    started_at = datetime.now(UTC)
+    started_ns = perf_counter_ns()
+    diagnostic_id = uuid4()
+    context = _DiagnosticContext()
+    diagnostic_log = FilesystemDiagnosticLog(_application_data_directory(arguments))
     parser = _build_parser()
     try:
         args = parser.parse_args(arguments)
     except CliUsageError as exc:
+        command = _command_hint(arguments)
+        persisted_id = _persist_diagnostic(
+            diagnostic_log,
+            diagnostic_id=diagnostic_id,
+            started_at=started_at,
+            started_ns=started_ns,
+            command=command,
+            context=context,
+            exit_code=EXIT_INVALID_INPUT,
+            error_code="invalid_input",
+            exc=exc,
+        )
         _emit_error(
-            _command_hint(arguments),
+            command,
             "invalid_input",
             str(exc),
             machine=machine,
+            diagnostic_id=persisted_id,
         )
         return EXIT_INVALID_INPUT
     except SystemExit as exc:
         return int(exc.code)
 
+    context.bind_arguments(args)
     command = " ".join(part for part in (args.command, getattr(args, "subcommand", None)) if part)
     try:
-        data, warnings = _dispatch(args)
-        _emit_success(command, data, warnings=warnings, machine=machine)
+        data, warnings = _dispatch(args, context)
+        context.bind_result(data)
+        context.phase = "completed"
+        persisted_id = _persist_diagnostic(
+            diagnostic_log,
+            diagnostic_id=diagnostic_id,
+            started_at=started_at,
+            started_ns=started_ns,
+            command=command,
+            context=context,
+            exit_code=EXIT_OK,
+        )
+        if persisted_id is None:
+            warnings = (*warnings, "diagnostic log could not be written")
+        _emit_success(
+            command,
+            data,
+            warnings=warnings,
+            machine=machine,
+            diagnostic_id=persisted_id,
+        )
         return EXIT_OK
     except Exception as exc:  # CLI is the error-to-protocol boundary.
         code, exit_code = _map_error(exc)
-        _emit_error(command, code, str(exc), machine=machine)
+        persisted_id = _persist_diagnostic(
+            diagnostic_log,
+            diagnostic_id=diagnostic_id,
+            started_at=started_at,
+            started_ns=started_ns,
+            command=command,
+            context=context,
+            exit_code=exit_code,
+            error_code=code,
+            exc=exc,
+        )
+        _emit_error(
+            command,
+            code,
+            str(exc),
+            machine=machine,
+            diagnostic_id=persisted_id,
+        )
         return exit_code
 
 
@@ -157,6 +263,18 @@ def _build_parser() -> argparse.ArgumentParser:
 
     doctor = subparsers.add_parser("doctor")
     doctor.add_argument("--repair", action="store_true")
+
+    diagnostics = subparsers.add_parser("diagnostics")
+    diagnostics_sub = diagnostics.add_subparsers(dest="subcommand", required=True)
+    diagnostics_list = diagnostics_sub.add_parser("list")
+    diagnostics_list.add_argument("--limit", type=int, default=50)
+    diagnostics_list.add_argument("--project-id", dest="diagnostic_project_id", type=UUID)
+    diagnostics_list.add_argument(
+        "--outcome",
+        choices=[item.value for item in DiagnosticOutcome],
+    )
+    diagnostics_show = diagnostics_sub.add_parser("show")
+    diagnostics_show.add_argument("--diagnostic-id", type=UUID, required=True)
 
     project = subparsers.add_parser("project")
     project_sub = project.add_subparsers(dest="subcommand", required=True)
@@ -360,7 +478,11 @@ def _add_intent_file_arguments(
     parser.add_argument("--current-outline", type=Path, required=required)
 
 
-def _dispatch(args: argparse.Namespace) -> tuple[Any, tuple[str, ...]]:
+def _dispatch(
+    args: argparse.Namespace,
+    diagnostic_context: _DiagnosticContext,
+) -> tuple[Any, tuple[str, ...]]:
+    diagnostic_context.phase = "execute_cli_command"
     if args.command == "version":
         return {
             "version": _package_version(),
@@ -371,52 +493,64 @@ def _dispatch(args: argparse.Namespace) -> tuple[Any, tuple[str, ...]]:
         return {"protocol_version": PROTOCOL_VERSION}, ()
     if args.command == "schema":
         return _show_schema(args.name), ()
+    if args.command == "diagnostics":
+        diagnostic_context.phase = "read_diagnostics"
+        return _diagnostics_command(args)
+    diagnostic_context.phase = "open_project_catalog"
     catalog = _catalog_service(args.catalog_dir)
     if args.command == "project":
-        return _project_command(args, catalog), ()
+        diagnostic_context.phase = "execute_project_catalog_command"
+        data = _project_command(args, catalog)
+        diagnostic_context.bind_result(data)
+        return data, ()
 
+    diagnostic_context.phase = "resolve_project"
     resolution = catalog.resolve(
         project_id=args.project_id,
         project_path=str(args.project) if args.project is not None else None,
         discovery_start=str(Path.cwd()),
     )
+    diagnostic_context.project_id = resolution.manifest.project_id
+    diagnostic_context.phase = "compose_application_services"
     services = _services(resolution)
     root = Path(resolution.project_path)
+    diagnostic_context.phase = "execute_application_command"
     if args.command == "bootstrap":
         data = _bootstrap_command(args, services)
         if args.subcommand == "apply":
             catalog.refresh(project_path=resolution.project_path)
         if args.subcommand != "inspect":
-            services.projects.rebuild_projection()
+            _rebuild_projection(services, diagnostic_context)
         return data, ()
     if args.command == "intent":
         data = _intent_command(args, services)
         if args.subcommand not in {"show", "inspect"}:
-            services.projects.rebuild_projection()
+            _rebuild_projection(services, diagnostic_context)
         return data, ()
     if args.command == "session":
         data = _session_command(args, services)
         if args.subcommand in {"start", "close"}:
-            services.projects.rebuild_projection()
+            _rebuild_projection(services, diagnostic_context)
         return data, ()
     if args.command == "draft":
         data = _draft_command(args, services)
         if args.subcommand == "save":
-            services.projects.rebuild_projection()
+            _rebuild_projection(services, diagnostic_context)
         return data, ()
     if args.command == "review":
         data = _review_command(args, services)
         if args.subcommand == "save":
-            services.projects.rebuild_projection()
+            _rebuild_projection(services, diagnostic_context)
         return data, ()
     if args.command == "publish":
         data = _publish_command(args, services)
         if args.subcommand != "inspect":
-            services.projects.rebuild_projection()
+            _rebuild_projection(services, diagnostic_context)
         return data, ()
     if args.command == "doctor":
+        diagnostic_context.phase = "inspect_project_health"
         status = (
-            services.projects.rebuild_projection()
+            _rebuild_projection(services, diagnostic_context)
             if args.repair
             else services.projects.ensure_projection_current()
         )
@@ -437,7 +571,7 @@ def _dispatch(args: argparse.Namespace) -> tuple[Any, tuple[str, ...]]:
                 source_refs=(),
                 reason=f"Entity alias resolution: {args.alias}",
             )
-            services.projects.rebuild_projection()
+            _rebuild_projection(services, diagnostic_context)
         return {
             "alias": args.alias,
             "matches": [item.model_dump(mode="json") for item in entities],
@@ -460,7 +594,7 @@ def _dispatch(args: argparse.Namespace) -> tuple[Any, tuple[str, ...]]:
                     source_refs=_character_source_refs(state),
                     reason=f"Character state at Scene {args.at_scene}",
                 )
-                services.projects.rebuild_projection()
+                _rebuild_projection(services, diagnostic_context)
             return state.model_dump(mode="json"), tuple(item.message for item in state.warnings)
         chain = services.queries.event_chain(
             args.event_id,
@@ -477,15 +611,15 @@ def _dispatch(args: argparse.Namespace) -> tuple[Any, tuple[str, ...]]:
                 source_refs=chain.source_refs,
                 reason=f"Event chain for {args.event_id}",
             )
-            services.projects.rebuild_projection()
+            _rebuild_projection(services, diagnostic_context)
         return chain.model_dump(mode="json"), tuple(item.message for item in chain.warnings)
     if args.command == "memory":
         data = _memory_command(args, services)
         if getattr(args, "session_id", None) is not None:
-            services.projects.rebuild_projection()
+            _rebuild_projection(services, diagnostic_context)
         return data, ()
     if args.command == "rebuild":
-        status = services.projects.rebuild_projection()
+        status = _rebuild_projection(services, diagnostic_context)
         return {
             "project_id": str(resolution.manifest.project_id),
             "project": resolution.project_path,
@@ -999,6 +1133,14 @@ def _services(resolution: ProjectResolution) -> _ServiceBundle:
     return _ServiceBundle(resolution)
 
 
+def _rebuild_projection(
+    services: _ServiceBundle,
+    diagnostic_context: _DiagnosticContext,
+) -> ProjectionStatus:
+    diagnostic_context.phase = "rebuild_projection"
+    return services.projects.rebuild_projection()
+
+
 def _catalog_service(catalog_directory: Path | None) -> ProjectCatalogService:
     directory = (
         catalog_directory.expanduser().resolve()
@@ -1012,6 +1154,40 @@ def _catalog_service(catalog_directory: Path | None) -> ProjectCatalogService:
         initialize_project=_initialize_project,
         inspect_project=_inspect_project,
     )
+
+
+def _diagnostics_command(
+    args: argparse.Namespace,
+) -> tuple[dict[str, Any], tuple[str, ...]]:
+    if args.project is not None:
+        raise ValueError("diagnostics commands do not accept --project")
+    store = FilesystemDiagnosticLog(
+        args.catalog_dir.expanduser().resolve()
+        if args.catalog_dir is not None
+        else default_app_data_directory()
+    )
+    if args.subcommand == "list":
+        project_id = _merge_selection(
+            args.project_id,
+            args.diagnostic_project_id,
+            option="--project-id",
+        )
+        records, warnings = store.list(
+            limit=args.limit,
+            project_id=project_id,
+            outcome=DiagnosticOutcome(args.outcome) if args.outcome is not None else None,
+        )
+        return {
+            "schema_version": DIAGNOSTIC_SCHEMA_VERSION,
+            "retention_days": DIAGNOSTIC_RETENTION_DAYS,
+            "records": [
+                record.model_dump(mode="json", exclude={"traceback"}) for record in records
+            ],
+        }, warnings
+    if args.project_id is not None:
+        raise ValueError("diagnostics show does not accept --project-id")
+    record, warnings = store.show(args.diagnostic_id)
+    return record.model_dump(mode="json"), warnings
 
 
 def _catalog_entry_data(entry: ProjectCatalogEntry) -> dict[str, Any]:
@@ -1051,6 +1227,72 @@ def _command_hint(arguments: list[str]) -> str:
         if len(values) == 2:
             break
     return " ".join(values) if values else "unknown"
+
+
+def _application_data_directory(arguments: list[str]) -> Path:
+    selected: str | None = None
+    index = 0
+    while index < len(arguments):
+        argument = arguments[index]
+        if argument == "--catalog-dir" and index + 1 < len(arguments):
+            selected = arguments[index + 1]
+            index += 2
+            continue
+        if argument.startswith("--catalog-dir="):
+            selected = argument.partition("=")[2]
+        index += 1
+    return Path(selected).expanduser().resolve() if selected else default_app_data_directory()
+
+
+def _persist_diagnostic(
+    log: FilesystemDiagnosticLog,
+    *,
+    diagnostic_id: UUID,
+    started_at: datetime,
+    started_ns: int,
+    command: str,
+    context: _DiagnosticContext,
+    exit_code: int,
+    error_code: str | None = None,
+    exc: Exception | None = None,
+) -> UUID | None:
+    completed_at = datetime.now(UTC)
+    traceback_text: str | None = None
+    if error_code == "internal_error" and exc is not None:
+        traceback_text = "".join(traceback_module.format_tb(exc.__traceback__))
+        traceback_text += f"{type(exc).__name__}\n"
+        if len(traceback_text) > 16_384:
+            traceback_text = "[traceback truncated]\n" + traceback_text[-16_384:]
+    error_message = None
+    if error_code is not None and error_code != "invalid_input" and exc is not None:
+        error_message = str(exc)
+        if len(error_message) > 2_048:
+            error_message = error_message[:2_048] + "…"
+    try:
+        log.append(
+            DiagnosticRecord(
+                diagnostic_id=diagnostic_id,
+                protocol_version=PROTOCOL_VERSION,
+                command=command,
+                phase=context.phase,
+                outcome=(
+                    DiagnosticOutcome.ERROR if error_code is not None else DiagnosticOutcome.SUCCESS
+                ),
+                exit_code=exit_code,
+                started_at=started_at,
+                completed_at=completed_at,
+                duration_ms=max(0, (perf_counter_ns() - started_ns) // 1_000_000),
+                project_id=context.project_id,
+                operation_ids=context.operation_ids,
+                error_code=error_code,
+                error_type=type(exc).__name__ if exc is not None else None,
+                error_message=error_message,
+                traceback=traceback_text,
+            )
+        )
+    except (OSError, ValidationError, ValueError):
+        return None
+    return diagnostic_id
 
 
 def _show_schema(name: str) -> dict[str, Any]:
@@ -1128,17 +1370,21 @@ def _emit_success(
     *,
     warnings: tuple[str, ...],
     machine: bool,
+    diagnostic_id: UUID | None,
 ) -> None:
     if machine:
+        payload = {
+            "protocol_version": PROTOCOL_VERSION,
+            "ok": True,
+            "command": command,
+            "data": data,
+            "warnings": list(warnings),
+        }
+        if diagnostic_id is not None:
+            payload["diagnostic_id"] = str(diagnostic_id)
         print(
             json.dumps(
-                {
-                    "protocol_version": PROTOCOL_VERSION,
-                    "ok": True,
-                    "command": command,
-                    "data": data,
-                    "warnings": list(warnings),
-                },
+                payload,
                 ensure_ascii=False,
                 sort_keys=True,
                 separators=(",", ":"),
@@ -1151,16 +1397,28 @@ def _emit_success(
         print(f"warning: {warning}", file=sys.stderr)
 
 
-def _emit_error(command: str, code: str, message: str, *, machine: bool) -> None:
+def _emit_error(
+    command: str,
+    code: str,
+    message: str,
+    *,
+    machine: bool,
+    diagnostic_id: UUID | None,
+) -> None:
     if machine:
+        payload = {
+            "protocol_version": PROTOCOL_VERSION,
+            "ok": False,
+            "command": command,
+            "error": {"code": code, "message": message},
+        }
+        if diagnostic_id is not None:
+            payload["diagnostic_id"] = str(diagnostic_id)
+        else:
+            payload["warnings"] = ["diagnostic log could not be written"]
         print(
             json.dumps(
-                {
-                    "protocol_version": PROTOCOL_VERSION,
-                    "ok": False,
-                    "command": command,
-                    "error": {"code": code, "message": message},
-                },
+                payload,
                 ensure_ascii=False,
                 sort_keys=True,
                 separators=(",", ":"),
@@ -1168,9 +1426,15 @@ def _emit_error(command: str, code: str, message: str, *, machine: bool) -> None
         )
         return
     print(f"novel {command}: {code}: {message}", file=sys.stderr)
+    if diagnostic_id is not None:
+        print(f"diagnostic_id: {diagnostic_id}", file=sys.stderr)
+    else:
+        print("warning: diagnostic log could not be written", file=sys.stderr)
 
 
 def _map_error(exc: Exception) -> tuple[str, int]:
+    if isinstance(exc, DiagnosticRecordNotFoundError):
+        return "diagnostic_not_found", EXIT_PROJECT
     if isinstance(exc, ProjectCatalogBusyError):
         return "catalog_busy", EXIT_BUSY
     if isinstance(exc, ProjectBusyError):

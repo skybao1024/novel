@@ -11,23 +11,27 @@ non-Canon navigation hints and approved manuscript text as the authority.
 ## Workflow
 
 1. Locate the project root containing `novel.yaml`.
-2. Run `novel version --json`, `novel protocol-version --json`, and
+2. Read `<root>/AGENTS.md` when present and follow it as the selected project's contract in the
+   current task, even when the Codex workspace or current directory is a parent of `<root>`.
+   Apply it only to operations bound to that project's Manifest and Project ID. Do not ask the
+   author to switch workspaces or start a new thread only to activate the project contract.
+3. Run `novel version --json`, `novel protocol-version --json`, and
    `novel --project <root> doctor --json`. Stop on an unhealthy project or incompatible protocol.
-3. If a Writing Session exists, use its stable ID on every navigation call. List Chapter
+4. If a Writing Session exists, use its stable ID on every navigation call. List Chapter
    navigation memory:
 
    ```text
    novel --project <root> memory chapters --session-id <session-id> --json
    ```
 
-4. Expand promising Chapters with stable IDs:
+5. Expand promising Chapters with stable IDs:
 
    ```text
    novel --project <root> memory scenes --chapter-id <chapter-id> \
      --session-id <session-id> --json
    ```
 
-5. When the location is unclear, search summaries before the target Scene:
+6. When the location is unclear, search summaries before the target Scene:
 
    ```text
    novel --project <root> memory search-summaries \
@@ -38,7 +42,7 @@ non-Canon navigation hints and approved manuscript text as the authority.
    ```
 
    Supply a query, an Entity ID, or both. Treat every hit as a candidate location only.
-6. Read selected approved prose with the exact Chapter/Scene pair:
+7. Read selected approved prose with the exact Chapter/Scene pair:
 
    ```text
    novel --project <root> memory read-scene \
@@ -48,7 +52,7 @@ non-Canon navigation hints and approved manuscript text as the authority.
      --json
    ```
 
-7. Interpret the returned exact UTF-8 text. Repeat summary search, Chapter expansion, and Scene
+8. Interpret the returned exact UTF-8 text. Repeat summary search, Chapter expansion, and Scene
    reads until you judge the history sufficient for the current writing or review task.
 
 ## Boundaries
@@ -62,3 +66,10 @@ non-Canon navigation hints and approved manuscript text as the authority.
   directly.
 - Never query SQLite, edit `memory/`, append the Canon Ledger, approve changes, call a model API,
   create Embeddings, or start a service.
+
+## Diagnostics
+
+Preserve the `diagnostic_id` returned by every CLI JSON envelope. When a call fails, report its
+stable error code and diagnostic ID, then run
+`novel diagnostics show --diagnostic-id <id> --json` before retrying. Diagnostic records are
+operational evidence, not approved narrative history or Canon.

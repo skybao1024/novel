@@ -55,7 +55,9 @@ Plugin 负责：
 - 不把提示策略复制成领域规则。
 
 Plugin 可以从自身模板创建 Codex 专用的项目根 `AGENTS.md`，但不独立保存业务数据，也不
-绕过 CLI 写正式 Intent、正文、导航记忆、Ledger 或运行产物。
+绕过 CLI 写正式 Intent、正文、导航记忆、Ledger 或运行产物。每个 Novel Skill 在解析出
+准确 Project 后主动读取该项目根 `AGENTS.md`，因此父目录工作区和当前会话无需切换即可
+应用所选小说的契约；契约只作用于绑定同一 Manifest 和 Project ID 的操作。
 
 ### 2.4 Application 与 Core
 
@@ -144,6 +146,12 @@ Application 返回起始环境：
 
 Codex 再按需搜索摘要、读取正式原文或查询关键 Canon。应用不限制查询次数，也不裁决
 信息是否足够。
+
+Plugin 设定连续性的最低读取规则：只要目标之前存在批准 Scene，Codex 在当前运行首次起草
+正文前必须读取紧邻 Scene 的完整原文；新 Chapter 还要查看上一 Chapter Summary，并读取
+其最后一个批准 Scene 的完整原文。若动作、对话、情绪或其他直接衔接尚未结束，Codex 继续
+读取承载该衔接的相关 Scene。该规则约束 Codex 工作方式，不变成 Application 的查询次数
+门槛。
 
 ### 5.3 写作和审核
 
