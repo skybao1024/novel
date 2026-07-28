@@ -16,12 +16,22 @@ workspace or current directory is a parent of `<root>`. Apply it only to operati
 project's Manifest and Project ID. Do not ask the author to switch workspaces or start a new thread
 only to activate the project contract.
 
+## Project workspace
+
+Use `<root>` as the working directory for every project-bound filesystem and CLI call, even when
+the Codex workspace remains a parent directory. Put Codex-authored Summary and optional Canon input
+files only under `<root>/candidates/writing/<session-id>/publication/`. `candidates/` is
+non-authoritative staging, not Novel business data. Never scatter these inputs in the parent
+workspace, directly in the project top level, or inside formal `memory/`, `canon/`, `runs/`, or
+`.novel/`.
+
 ## Prepare
 
 1. Confirm the exact open Session, Draft revision, and one or more Reviews.
 2. Generate a UTF-8 Scene Summary that describes only the candidate Scene and a UTF-8 Chapter
    Summary that aggregates the Chapter. Optionally prepare an approved Intent Revision ID and a
-   versioned JSON array of sparse Canon Ledger records.
+   versioned JSON array of sparse Canon Ledger records. Store all generated input files in the
+   project-local publication candidate directory.
 3. Call:
 
    ```text
@@ -35,8 +45,12 @@ only to activate the project contract.
    `--canon-records` only when they are accurate. The Application derives Summary bindings,
    Document/Scene IDs, revisions, and dependency digests.
 4. Run `publish inspect --publication-id <id>`. Present the manuscript, structure, Summary,
-   optional Intent, Canon Diffs, Review conclusions, unresolved questions, and approval digest.
-   Stop and wait.
+   optional Intent, Canon Diffs, Review conclusions, unresolved questions, exact Publication ID,
+   and approval digest. Ask the author to approve that exact pair, then stop and wait.
+
+When `$novel-writing` hands off a `ready` Review, complete Prepare and Inspect in that same Codex
+turn. Do not stop after merely reporting that the Scene is ready or unpublished, and do not defer
+the approval request until the author later asks to continue writing.
 
 ## Approve and apply
 

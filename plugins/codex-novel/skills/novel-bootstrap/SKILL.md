@@ -16,6 +16,15 @@ current directory is a parent of `<root>`. Apply it only to operations bound to 
 Manifest and Project ID. Do not ask the author to switch workspaces or start a new thread only to
 activate the project contract.
 
+## Project workspace
+
+After resolving or creating `<root>`, use it as the working directory for every project-bound
+filesystem and CLI call, even when the Codex workspace remains a parent directory. Put
+Codex-authored CLI input files only under `<root>/candidates/`, grouped by the stable operation ID
+as soon as one exists or by a unique pending-operation directory beforehand. `candidates/` is
+non-authoritative staging, not Novel business data. Never scatter candidate files in the parent
+workspace, directly in the project top level, or inside formal `intent/`, `runs/`, or `.novel/`.
+
 ## New project
 
 1. If the project does not exist, choose one explicit root with the author and run:
@@ -40,7 +49,8 @@ activate the project contract.
 5. Discuss the novel with the author. Prepare four non-empty UTF-8 files: Creative Brief,
    Story Bible, Writing Rules, and Current Outline. Optionally prepare a versioned JSON array of
    Bootstrap Entity drafts containing only temporary name, type, and display name; the
-   Application allocates their stable IDs before approval.
+   Application allocates their stable IDs before approval. Store these inputs under
+   `<root>/candidates/bootstrap/<bootstrap-id>/`.
 6. Save the candidate:
 
    ```text
@@ -61,8 +71,9 @@ Do not treat “continue”, ordinary feedback, or approval of another revision 
 ## Later Intent Revision
 
 1. Run `novel --project <root> intent show --json`.
-2. Prepare one or more replacement UTF-8 files and call `intent prepare` with only the changed
-   file options.
+2. Prepare one or more replacement UTF-8 files under a unique
+   `<root>/candidates/intent/<operation>/` directory and call `intent prepare` with only the
+   changed file options.
 3. Run `intent inspect`; show its Diff and digest, then wait.
 4. After exact author approval, call `intent approve`. Use `intent apply` for a standalone change,
    or leave it approved for inclusion by ID in a Publish Plan.

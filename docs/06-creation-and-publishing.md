@@ -18,6 +18,8 @@
 该文件不是 Intent Canon，也不由 Application/Core 生成；已有不同内容时 Plugin 必须保留
 原文件并报告冲突。Skill 安装后立即读取该契约；以后其他 Novel Skill 也在解析出准确
 Project 后主动读取，因此小说位于当前工作区子目录时不要求作者切换工作区或新建会话。
+从解析成功开始，Skill 把 Project 根作为项目工具工作目录，并把 Codex 生成的 CLI 输入
+集中到项目内按需创建的 `candidates/`，不在父目录或项目顶层散落候选文件。
 
 空项目状态不能被当作已经具备创作环境。
 
@@ -39,6 +41,9 @@ Bootstrap 内容允许反复保存 revision，不直接覆盖正式 `intent/`。
 当前正式 `bootstrap save` 接收四份候选 Intent 文件和可选 Bootstrap Entity Draft。
 Entity Draft 只携带临时名称、类型和显示名；Application 在审批前分配并返回稳定 Entity
 UUID，同一个 Bootstrap Run 的后续保存会为同一临时名称保留该 UUID。
+
+这些由 Codex 生成的输入文件位于 `candidates/bootstrap/<bootstrap-id>/`。它们是 Plugin
+暂存输入，不是正式 Intent 或 Run 资产；正式候选 revision 仍由 Application 保存。
 
 ### 1.3 检查和应用
 
@@ -112,6 +117,10 @@ Plugin 要求 Codex 在当前运行首次起草正文前执行连续性的最低
 Scene 的完整原文；直接动作、对话、情绪或其他衔接跨越更多 Scene 时继续扩展读取。该规则
 不下沉为 Application 的查询次数门槛，摘要缺失或 stale 也不能替代或免除所需原文读取。
 
+StoryTime、待保存正文和发布摘要等 Codex 文件输入集中在
+`candidates/writing/<writing-session-id>/`；Session ID 分配前使用唯一 pending 子目录。
+Application 不读取父工作区寻找输入，也不把 `candidates/` 当作正式 Draft 或正文。
+
 ## 4. Draft Revision
 
 `draft save` 接收非空 UTF-8 正文，由 Application 计算 revision。
@@ -155,6 +164,11 @@ Reviewer 可以：
 Application 校验 Review 绑定和引用存在，不判断文学结论是否正确。
 
 Writer 可以基于 Review 保存新 Draft Revision，然后建立新 Review。旧 Review 保持不变。
+
+Review recommendation 达到 `ready` 后，除非作者明确要求 draft-only 或 review-only，
+Plugin 在同一轮生成发布所需摘要，调用 `publish prepare` 和 `publish inspect`，展示准确
+Diff、Publication ID 与 approval digest 并请求作者确认。Review 的 `ready` 不构成批准，
+Plugin 不得自动调用 approve/apply，但也不得把确认请求拖到作者下一次“继续写”。
 
 ## 6. 导航记忆、Intent 与 Canon 提案
 
@@ -274,10 +288,10 @@ Plugin 在一次完整创作中：
 5. 保存 Draft Revision；
 6. 以 Reviewer 角色审核并继续查询；
 7. 保存修订稿；
-8. 生成摘要和可选 Canon；
+8. Review 达到 `ready` 后在同一轮生成摘要和可选 Canon；
 9. 准备可选 Intent 更新；
-10. 准备 Publish Plan；
-11. 展示 Diff 并等待作者批准；
+10. 准备并 inspect Publish Plan；
+11. 在当前轮展示 Diff、准确 ID 和 Digest 并等待作者批准；
 12. 只在获得准确批准后调用 Publish Apply。
 
 Plugin 不直接修改项目文件，不用提示词代替 Draft、Review、批准或事务记录。

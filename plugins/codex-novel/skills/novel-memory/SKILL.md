@@ -14,7 +14,8 @@ non-Canon navigation hints and approved manuscript text as the authority.
 2. Read `<root>/AGENTS.md` when present and follow it as the selected project's contract in the
    current task, even when the Codex workspace or current directory is a parent of `<root>`.
    Apply it only to operations bound to that project's Manifest and Project ID. Do not ask the
-   author to switch workspaces or start a new thread only to activate the project contract.
+   author to switch workspaces or start a new thread only to activate the project contract. Use
+   `<root>` as the working directory for every project-bound tool call.
 3. Run `novel version --json`, `novel protocol-version --json`, and
    `novel --project <root> doctor --json`. Stop on an unhealthy project or incompatible protocol.
 4. If a Writing Session exists, use its stable ID on every navigation call. List Chapter

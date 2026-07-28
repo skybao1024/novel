@@ -99,7 +99,11 @@ Skill 只能通过 CLI 执行业务动作，不能直接修改 SQLite、Ledger�
 记录。Bootstrap Skill 可以从插件内的固定模板创建项目根 `AGENTS.md`；该文件只约束
 Codex 行为，不属于小说业务数据，且不得覆盖作者已有的不同项目指令。Novel Skills 在
 选择准确项目后显式读取该文件，不依赖工作区启动时的递归发现，也不要求作者为子目录小说
-切换工作区或新建会话。
+切换工作区或新建会话。选择后，Skill 把准确 Project 根作为项目工具工作目录，并仅在
+项目内按需创建非正式 `candidates/` 暂存 CLI 输入，不向父工作区或项目顶层散落候选文件。
+
+当准确 Draft 的 Review 达到 `ready` 时，Skill 在同一轮进入 Publish prepare/inspect 并
+展示批准 Digest；作者确认仍是独立的下一步，Application 不从 Review 自动推导批准。
 
 ## 3. 服务边界
 

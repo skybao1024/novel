@@ -1,4 +1,4 @@
 interface:
   display_name: "Novel Writing"
-  short_description: "Continuity-aware writing, drafts, and review"
-  default_prompt: "Use $novel-writing to recover adjacent approved prose, then draft and review a bounded scene."
+  short_description: "Write with continuity through digest handoff"
+  default_prompt: "Use $novel-writing to recover adjacent approved prose, write and review a scene, then prepare it for immediate digest approval."

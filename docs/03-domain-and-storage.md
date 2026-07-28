@@ -35,6 +35,7 @@ status
 ```text
 my-novel/
 ├── novel.yaml
+├── candidates/                 # Plugin 按需创建的非正式 CLI 输入暂存区
 ├── intent/
 │   ├── creative-brief.md
 │   ├── story-bible.md
@@ -59,6 +60,12 @@ my-novel/
     ├── locks/
     └── tmp/
 ```
+
+`candidates/` 不由 `project create` 预建，只由 Plugin 在真实 Bootstrap、Intent、Writing
+或 Publication 工作需要文件输入时按需创建。它按稳定操作 ID（ID 尚未分配时按唯一 pending
+目录）组织，是非权威暂存区，不属于 Application 业务数据，不参与 Project 健康、SQLite
+重建、批准或恢复，也不能替代 `runs/` 中的不可变资产。Codex 不得把候选输入放到项目父
+目录、项目顶层或正式业务目录。
 
 `runs/` 子目录按真实操作按需创建，空项目不预建通用任务、缓存或候选目录。
 

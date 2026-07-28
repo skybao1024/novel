@@ -1,6 +1,6 @@
 ---
 name: novel-writing
-description: Run a project-bound Writing Session, recover approved history within its Narrative Order boundary, save immutable Draft Revisions, and record an AI Review. Use when an author asks Codex to write, continue, insert, revise, or review a Scene in a bootstrapped local Novel project.
+description: Run a project-bound Writing Session, recover approved history within its Narrative Order boundary, save immutable Draft Revisions, record an AI Review, and immediately surface exact publication approval for a ready Scene. Use when an author asks Codex to write, continue, insert, revise, or review a Scene in a bootstrapped local Novel project.
 ---
 
 # Novel Writing
@@ -16,11 +16,22 @@ workspace or current directory is a parent of `<root>`. Apply it only to operati
 project's Manifest and Project ID. Do not ask the author to switch workspaces or start a new thread
 only to activate the project contract.
 
+## Project workspace
+
+Use `<root>` as the working directory for every project-bound filesystem and CLI call, even when
+the Codex workspace remains a parent directory. Put Codex-authored StoryTime, prose, Review input,
+and publication input files only under `<root>/candidates/`, grouped by Writing Session ID as soon
+as it exists or by a unique pending-session directory beforehand. `candidates/` is
+non-authoritative staging, not Novel business data. Never scatter these files in the parent
+workspace, directly in the project top level, or inside formal `manuscript/`, `runs/`, or
+`.novel/`.
+
 ## Session
 
 1. Verify `novel --project <root> doctor --json` is healthy.
-2. Prepare a versioned StoryTime JSON file. Start a Session with the author goal and either an
-   existing `--chapter-id` or a new Chapter number/title. Use `--before-scene-id` and
+2. Prepare a versioned StoryTime JSON file under a unique
+   `<root>/candidates/writing/pending-<operation>/` directory. Start a Session with the author goal
+   and either an existing `--chapter-id` or a new Chapter number/title. Use `--before-scene-id` and
    `--after-scene-id` to state the exact insertion boundary.
 3. Run `session context --session-id <id>`. Do not invent a manuscript Document for the
    unpublished target Scene.
@@ -65,16 +76,38 @@ Canon queries until you judge the semantic context sufficient.
 
 ## Draft and Review
 
-1. Save non-empty UTF-8 prose with `draft save --session-id <id> --file <file>`. Save another
-   revision instead of overwriting.
+1. Save non-empty UTF-8 prose from `<root>/candidates/writing/<session-id>/` with
+   `draft save --session-id <id> --file <file>`. Save another revision instead of overwriting.
 2. Review the exact returned Draft revision as a distinct Reviewer role. Continue Session-bound
    history queries when needed.
 3. Save the Review with `review save`, its exact `--draft-revision`, recommendation, conclusion,
    findings, uncertainties, and any returned retrieved-source IDs.
 4. Revise and repeat as needed. Keep old Drafts and Reviews unchanged.
 
-Do not write formal manuscript, summary, Intent, Ledger, or SQLite files directly. Do not publish
-from this skill; hand the stable Draft and Review IDs to `$novel-publish`.
+## Publication handoff
+
+After saving a Review:
+
+1. If its recommendation is not `ready`, revise or report the blocker without preparing a
+   Publication.
+2. If it is `ready` and the author explicitly requested draft-only or review-only work, report the
+   stable Draft and Review IDs and stop without preparing a Publication.
+3. Otherwise continue in the same Codex turn with `$novel-publish`. Use the exact Session, Draft,
+   and Review; prepare Scene and Chapter Summary inputs under
+   `<root>/candidates/writing/<session-id>/publication/`; call `publish prepare`, then
+   `publish inspect`.
+4. Present the protected manuscript, structure, Summary, optional Intent and Canon Diffs,
+   unresolved questions, exact `publication_id`, and exact `approval_digest`. End by asking the
+   author to approve that exact pair.
+
+Do not end a normal Scene-writing turn with only “Review ready” or “not yet published”, and do not
+wait for a later “continue writing” request to surface the pending approval. Before opening the next
+Writing Session, surface any existing ready Review that has not completed this handoff unless the
+author explicitly left it draft-only. Never call `publish approve` or `publish apply` without the
+author's exact approval.
+
+Do not write formal manuscript, summary, Intent, Ledger, or SQLite files directly. Let
+`$novel-publish` own Publication commands and approval boundaries.
 
 ## Diagnostics
 

@@ -79,7 +79,9 @@ Manifest 并维护 Catalog 引用；`project remove` 不读取或删除项目资
 校验根目录存在 `novel.yaml`，相同模板可以幂等复用，已有不同 `AGENTS.md` 时不得覆盖。
 当 Codex 工作区位于多个小说的共同父目录时，执行中的 Novel Skill 根据已经解析的准确
 Project 根显式读取该文件，并把契约限定到同一 Manifest 和 Project ID；用户无需切换
-工作区或重开会话。
+工作区或重开会话。Skill 随后把准确 Project 根作为所有项目工具调用的工作目录；Codex
+生成的 StoryTime、Draft、Summary 等 CLI 文件输入只能进入该项目内按需创建的
+`candidates/` 子目录，不能写到共同父目录或直接散落在项目顶层。
 
 ## 4. CLI 协议
 
@@ -218,6 +220,11 @@ Session 中保存的 Narrative Order 边界并自动写入 `retrieved_sources`�
 
 每个 Run 使用稳定 ID 独立目录。不可变 Draft、Review、Diff、批准和事务记录不得被同 ID
 覆盖。
+
+`candidates/` 是 Plugin 生成 CLI 输入时使用的项目内非正式暂存区。它不进入 SQLite，不
+参与批准或恢复，也不是 Draft/Review/Publication 的权威副本。Plugin 按操作分目录保留
+这些文件以便作者识别，不得把它们留在父工作区；清理时也不能用候选文件的存在与否决定
+删除 `runs/` 资产。
 
 允许清理的仅是明确可重建的临时文件。未发布草稿和 Review 是用户创作资产，不能作为
 普通缓存删除。

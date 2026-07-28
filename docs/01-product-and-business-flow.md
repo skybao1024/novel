@@ -57,7 +57,9 @@ Plugin 负责：
 Plugin 可以从自身模板创建 Codex 专用的项目根 `AGENTS.md`，但不独立保存业务数据，也不
 绕过 CLI 写正式 Intent、正文、导航记忆、Ledger 或运行产物。每个 Novel Skill 在解析出
 准确 Project 后主动读取该项目根 `AGENTS.md`，因此父目录工作区和当前会话无需切换即可
-应用所选小说的契约；契约只作用于绑定同一 Manifest 和 Project ID 的操作。
+应用所选小说的契约；契约只作用于绑定同一 Manifest 和 Project ID 的操作。解析完成后，
+Plugin 把该 Project 根作为项目工具的工作目录，并把 Codex 生成的 CLI 输入集中到项目内
+`candidates/`，不在共同父目录或项目顶层散落 StoryTime、Draft 和 Summary 文件。
 
 ### 2.4 Application 与 Core
 
@@ -161,6 +163,11 @@ Codex 保存多个不可变 Draft Revision。Reviewer 必须绑定准确 Draft R
 语义问题形成 Review 建议，不成为 Application 硬错误。Writer 可以基于 Review 保存新
 revision 并再次审核。
 
+当 Review 结论达到 `ready` 时，除非作者明确要求只保留 Draft 或只做 Review，Plugin 必须
+在同一轮转入发布准备，生成摘要、调用 `publish prepare` 和 `publish inspect`，向作者展示
+准确 Diff、Publication ID 和 approval digest 后请求确认。Plugin 不能只报告“ready、尚未
+发布”，也不能等作者下一次说“继续写”才补做批准交接。
+
 ### 5.4 准备发布
 
 稳定稿产生：
@@ -173,6 +180,9 @@ revision 并再次审核。
 - Reviewer 结论。
 
 Application 生成正文、导航记忆和 Canon Diff，并计算唯一 approval digest。
+
+准备和检查 Publish Plan 不构成批准。只有作者在看到该计划后明确批准准确
+`publication_id + approval_digest`，Plugin 才能 apply。
 
 ### 5.5 批准和发布
 

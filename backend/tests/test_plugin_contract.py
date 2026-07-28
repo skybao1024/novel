@@ -44,6 +44,13 @@ DIAGNOSTIC_PHRASES = (
     "diagnostics show --diagnostic-id",
     "operational evidence",
 )
+PROJECT_WORKSPACE_PHRASES = (
+    "working directory for every project-bound",
+    "<root>/candidates/",
+    "parent workspace",
+    "project top level",
+    "non-authoritative staging",
+)
 
 
 def test_plugin_manifest_and_repo_marketplace_are_installable_contracts() -> None:
@@ -59,11 +66,12 @@ def test_plugin_manifest_and_repo_marketplace_are_installable_contracts() -> Non
     assert manifest["name"] == "codex-novel"
     assert manifest["version"].split("+", maxsplit=1)[0] == "0.4.0"
     assert manifest["skills"] == "./skills/"
-    assert "loads the selected project's Codex boundaries in place" in long_description
-    assert "publishes immutable Draft revisions" in long_description
+    assert "keeps staging inputs contained inside that project" in long_description
+    assert "surfaces exact publication approval" in long_description
     assert "compatib" not in long_description.lower()
     assert "load the selected project contract in place" in default_prompt
-    assert "explicit project and digest boundaries" in default_prompt
+    assert "keep candidate inputs contained" in default_prompt
+    assert "before ending the writing turn" in default_prompt
     assert "mcpServers" not in manifest
     assert "apps" not in manifest
     assert "hooks" not in manifest
@@ -128,6 +136,8 @@ def test_plugin_exposes_creation_loop_and_ai_first_memory_skills() -> None:
             assert phrase in normalized_body
         for phrase in DIAGNOSTIC_PHRASES:
             assert phrase in normalized_body
+        for phrase in PROJECT_WORKSPACE_PHRASES:
+            assert phrase in normalized_body
         expected_entries = {"SKILL.md", "agents"}
         if skill_name == "novel-bootstrap":
             expected_entries.update({"assets", "scripts"})
@@ -164,6 +174,28 @@ def test_writing_skill_requires_exact_adjacent_prose_before_drafting() -> None:
     assert "recover adjacent approved prose" in metadata
 
 
+def test_ready_review_surfaces_publication_approval_in_the_same_turn() -> None:
+    writing_root = PLUGIN_ROOT / "skills" / "novel-writing"
+    writing = " ".join((writing_root / "SKILL.md").read_text(encoding="utf-8").split())
+    writing_metadata = (writing_root / "agents" / "openai.yaml").read_text(encoding="utf-8")
+    publishing = " ".join(
+        (PLUGIN_ROOT / "skills" / "novel-publish" / "SKILL.md").read_text(encoding="utf-8").split()
+    )
+
+    assert "If it is `ready`" in writing
+    assert "draft-only or review-only" in writing
+    assert "same Codex turn with `$novel-publish`" in writing
+    assert "call `publish prepare`, then `publish inspect`" in writing
+    assert "exact `publication_id`, and exact `approval_digest`" in writing
+    assert "Do not end a normal Scene-writing turn with only" in writing
+    assert "do not wait for a later “continue writing” request" in writing
+    assert "Never call `publish approve` or `publish apply`" in writing
+    assert "immediate digest approval" in writing_metadata
+
+    assert "complete Prepare and Inspect in that same Codex turn" in publishing
+    assert "do not defer the approval request" in publishing
+
+
 def test_bootstrap_project_guidance_captures_codex_boundaries() -> None:
     guidance = (BOOTSTRAP_SKILL_ROOT / "assets" / "project-AGENTS.md").read_text(encoding="utf-8")
 
@@ -174,6 +206,9 @@ def test_bootstrap_project_guidance_captures_codex_boundaries() -> None:
     assert "exact operation ID and approval digest" in guidance
     assert "missing structured Canon does not prove" in guidance
     assert "approved manuscript prose as the primary source" in guidance
+    assert "project root as the working directory" in guidance
+    assert "project-local `candidates/`" in guidance
+    assert "immediately prepare and inspect its Publication" in guidance
 
 
 def test_project_guidance_installer_is_idempotent_and_never_overwrites(

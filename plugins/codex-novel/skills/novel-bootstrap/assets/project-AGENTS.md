@@ -6,6 +6,8 @@
 - Read and verify `novel.yaml` before starting project work.
 - Bind every write to the exact Project ID and normalized project root.
 - Never select a write target from a title, recent directory, or fuzzy path.
+- Use this project root as the working directory for project-bound tools even when the Codex
+  workspace is a parent directory.
 
 ## Workflow routing
 
@@ -19,6 +21,9 @@
 
 - Never directly edit formal `intent/`, `structure/`, `manuscript/`, `memory/`,
   `canon/ledger/`, `runs/`, or `.novel/`.
+- Put Codex-authored CLI input only under project-local `candidates/`, grouped by operation ID when
+  available. Never scatter it in a parent workspace or directly in the project top level.
+- Treat `candidates/` as non-authoritative staging; it cannot replace immutable assets in `runs/`.
 - Keep discussion and comparison artifacts outside formal Intent and label them as candidates.
 - Do not describe a Draft, Review, summary, or comparison artifact as approved Canon.
 - Do not delete Draft, Review, Bootstrap, Intent Revision, or Publication assets as cache.
@@ -27,6 +32,9 @@
 
 - When the author asks only to discuss or compare, do not write a formal Scene or publish.
 - Before writing, create or resume the exact Writing Session and load its Creation Context.
+- When a Scene Review becomes `ready`, immediately prepare and inspect its Publication in the same
+  turn unless the author explicitly requested draft-only work. Show the exact Publication ID and
+  approval digest before ending the turn.
 - Treat ordinary feedback, “continue”, and approval of another revision as non-approval.
 - Approve or apply Bootstrap, Intent, or Publication only when the author explicitly approves the
   exact operation ID and approval digest shown by its inspect command.
