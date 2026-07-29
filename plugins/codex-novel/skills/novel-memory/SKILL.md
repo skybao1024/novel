@@ -1,6 +1,6 @@
 ---
 name: novel-memory
-description: Navigate a local Novel project with Chapter and Scene summaries, search navigation memory, and read exact approved historical Scene prose through stable IDs. Use when Codex needs to recover historical context for AI-first writing or review.
+description: Navigate a local Novel project with Chapter and Scene summaries, Entity occurrence lines, search navigation memory, and read exact approved historical Scene prose through stable IDs. Use when Codex needs to recover historical context or disambiguate an Entity for AI-first writing or review.
 ---
 
 # Novel Memory
@@ -53,15 +53,29 @@ non-Canon navigation hints and approved manuscript text as the authority.
      --json
    ```
 
-8. Interpret the returned exact UTF-8 text. Repeat summary search, Chapter expansion, and Scene
-   reads until you judge the history sufficient for the current writing or review task.
+8. When resolving a known Entity candidate, inspect its revision-bound occurrence line:
+
+   ```text
+   novel --project <root> memory entity-line \
+     --entity-id <entity-id> --session-id <session-id> --json
+   ```
+
+   Treat Scene Trace Mentions and occurrences as candidate locations, not proof of identity or
+   narrative fact. Read the referenced exact Scene prose when the distinction matters.
+9. Interpret the returned exact UTF-8 text. Repeat summary search, Entity occurrence navigation,
+   Chapter expansion, and Scene reads until you judge the history sufficient for the task.
 
 ## Boundaries
 
 - Use stable Chapter, Scene, Document, and Entity IDs; chapter and scene numbers are display data.
 - Never infer that missing or stale summaries mean an event did not happen.
+- Never infer that a missing or stale Scene Trace means an Entity did not appear.
+- Never use a unique, exact, fuzzy, or recent name match as an automatic Entity identity.
 - Never use FTS rank, hit count, or a summary to declare a fact or semantic sufficiency.
 - Never request the target Scene or a later Scene through ordinary historical reading.
+- Never call `trace-backfill source` or `trace-backfill entity-line` during ordinary Writing
+  Session navigation. Those full-history maintenance reads belong only to an explicit
+  `$novel-trace-backfill` task.
 - Never replace the saved Session boundary with an ad hoc `--before-scene`.
 - Report revision mismatch or invalid Chapter/Scene membership; do not bypass it by reading files
   directly.

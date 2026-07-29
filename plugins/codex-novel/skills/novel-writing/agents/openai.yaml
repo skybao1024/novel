@@ -1,4 +1,7 @@
 interface:
   display_name: "Novel Writing"
-  short_description: "Write with continuity through digest handoff"
-  default_prompt: "Use $novel-writing to recover adjacent approved prose, write and review a scene, then prepare it for immediate digest approval."
+  short_description: "Write with continuity and resolved entity traces"
+  default_prompt: "Use $novel-writing to recover required predecessor-Chapter prose, preserve the exact new-Chapter heading, resolve Entity mentions into a Scene Trace, review, and prepare immediate digest approval."
+
+policy:
+  allow_implicit_invocation: true

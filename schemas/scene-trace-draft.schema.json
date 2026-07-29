@@ -1,0 +1,277 @@
+{
+  "$defs": {
+    "EntityMentionDraft": {
+      "additionalProperties": false,
+      "properties": {
+        "considered_entity_ids": {
+          "default": [],
+          "items": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Considered Entity Ids",
+          "type": "array"
+        },
+        "end_offset": {
+          "minimum": 1,
+          "title": "End Offset",
+          "type": "integer"
+        },
+        "mention_form": {
+          "$ref": "#/$defs/EntityMentionForm"
+        },
+        "mention_ordinal": {
+          "minimum": 1,
+          "title": "Mention Ordinal",
+          "type": "integer"
+        },
+        "new_entity_temporary_name": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "New Entity Temporary Name"
+        },
+        "resolution_reason": {
+          "minLength": 1,
+          "title": "Resolution Reason",
+          "type": "string"
+        },
+        "resolution_status": {
+          "$ref": "#/$defs/EntityResolutionStatus"
+        },
+        "resolved_entity_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resolved Entity Id"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "start_offset": {
+          "minimum": 0,
+          "title": "Start Offset",
+          "type": "integer"
+        },
+        "surface_text": {
+          "minLength": 1,
+          "title": "Surface Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "mention_ordinal",
+        "start_offset",
+        "end_offset",
+        "surface_text",
+        "mention_form",
+        "resolution_status",
+        "resolution_reason"
+      ],
+      "title": "EntityMentionDraft",
+      "type": "object"
+    },
+    "EntityMentionForm": {
+      "enum": [
+        "name",
+        "alias",
+        "pronoun",
+        "description"
+      ],
+      "title": "EntityMentionForm",
+      "type": "string"
+    },
+    "EntityPresenceKind": {
+      "enum": [
+        "present",
+        "mentioned",
+        "recalled",
+        "offstage"
+      ],
+      "title": "EntityPresenceKind",
+      "type": "string"
+    },
+    "EntityProminence": {
+      "enum": [
+        "focus",
+        "supporting",
+        "cameo",
+        "background"
+      ],
+      "title": "EntityProminence",
+      "type": "string"
+    },
+    "EntityResolutionStatus": {
+      "enum": [
+        "resolved_existing",
+        "resolved_new",
+        "anonymous",
+        "ignored",
+        "ambiguous"
+      ],
+      "title": "EntityResolutionStatus",
+      "type": "string"
+    },
+    "SceneEntityOccurrenceDraft": {
+      "additionalProperties": false,
+      "properties": {
+        "mention_ordinals": {
+          "default": [],
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 256,
+          "title": "Mention Ordinals",
+          "type": "array"
+        },
+        "new_entity_temporary_name": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "New Entity Temporary Name"
+        },
+        "presence_kind": {
+          "$ref": "#/$defs/EntityPresenceKind"
+        },
+        "prominence": {
+          "$ref": "#/$defs/EntityProminence"
+        },
+        "resolved_entity_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resolved Entity Id"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "presence_kind",
+        "prominence"
+      ],
+      "title": "SceneEntityOccurrenceDraft",
+      "type": "object"
+    },
+    "SceneTraceEntityDraft": {
+      "additionalProperties": false,
+      "properties": {
+        "display_name": {
+          "minLength": 1,
+          "title": "Display Name",
+          "type": "string"
+        },
+        "entity_type": {
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9_-]*$",
+          "title": "Entity Type",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "temporary_name": {
+          "minLength": 1,
+          "title": "Temporary Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "temporary_name",
+        "entity_type",
+        "display_name"
+      ],
+      "title": "SceneTraceEntityDraft",
+      "type": "object"
+    }
+  },
+  "$id": "https://novel.local/schemas/scene-trace-draft.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "entity_occurrences": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/SceneEntityOccurrenceDraft"
+      },
+      "maxItems": 256,
+      "title": "Entity Occurrences",
+      "type": "array"
+    },
+    "mentions": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/EntityMentionDraft"
+      },
+      "maxItems": 512,
+      "title": "Mentions",
+      "type": "array"
+    },
+    "new_entities": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/SceneTraceEntityDraft"
+      },
+      "maxItems": 64,
+      "title": "New Entities",
+      "type": "array"
+    },
+    "scan_notes": {
+      "default": [],
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxItems": 64,
+      "title": "Scan Notes",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "title": "SceneTraceDraft",
+  "type": "object",
+  "x-schema-version": "1.0.0"
+}

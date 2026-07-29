@@ -1,0 +1,37 @@
+{
+  "$id": "https://novel.local/schemas/scene-trace-entity-draft.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "display_name": {
+      "minLength": 1,
+      "title": "Display Name",
+      "type": "string"
+    },
+    "entity_type": {
+      "minLength": 1,
+      "pattern": "^[a-z][a-z0-9_-]*$",
+      "title": "Entity Type",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "temporary_name": {
+      "minLength": 1,
+      "title": "Temporary Name",
+      "type": "string"
+    }
+  },
+  "required": [
+    "temporary_name",
+    "entity_type",
+    "display_name"
+  ],
+  "title": "SceneTraceEntityDraft",
+  "type": "object",
+  "x-schema-version": "1.0.0"
+}

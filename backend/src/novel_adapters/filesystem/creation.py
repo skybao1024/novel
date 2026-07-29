@@ -25,6 +25,7 @@ from novel_core import (
     Publication,
     RetrievedSource,
     Review,
+    SceneTraceBackfill,
     WritingSession,
 )
 from novel_core._base import VersionedDomainModel
@@ -50,6 +51,7 @@ class RunSourceSnapshot:
         reviews: tuple[Review, ...],
         retrieved_sources: tuple[RetrievedSource, ...],
         publications: tuple[Publication, ...],
+        trace_backfills: tuple[SceneTraceBackfill, ...],
         revision: str,
     ) -> None:
         self.bootstrap_runs = bootstrap_runs
@@ -59,6 +61,7 @@ class RunSourceSnapshot:
         self.reviews = reviews
         self.retrieved_sources = retrieved_sources
         self.publications = publications
+        self.trace_backfills = trace_backfills
         self.revision = revision
 
 
@@ -111,6 +114,12 @@ class FilesystemRunIndexStore:
             Publication,
             "Publication",
         )
+        trace_backfills = self._load_pattern(
+            self.layout.trace_backfill_runs,
+            "*/backfill.json",
+            SceneTraceBackfill,
+            "Scene Trace Backfill",
+        )
         hasher = hashlib.sha256()
         runs_root = self.layout.root / "runs"
         if runs_root.is_dir():
@@ -131,6 +140,7 @@ class FilesystemRunIndexStore:
             reviews=reviews,
             retrieved_sources=sources,
             publications=publications,
+            trace_backfills=trace_backfills,
             revision=f"sha256:{hasher.hexdigest()}",
         )
 
@@ -148,6 +158,16 @@ class FilesystemRunIndexStore:
             f"{publication.plan.publication_id} ({publication.status.value})"
             for publication in snapshot.publications
             if publication.status.value in active_transaction_states
+        ) + tuple(
+            "unfinished Trace Backfill transaction: "
+            f"{backfill.plan.backfill_id} ({backfill.status.value})"
+            for backfill in snapshot.trace_backfills
+            if backfill.status.value
+            in {
+                "ledger_appended",
+                "trace_installed",
+                "projection_rebuilt",
+            }
         )
 
     @staticmethod
@@ -366,6 +386,27 @@ class FilesystemPublicationStore:
 
     def _path(self, publication_id: UUID) -> Path:
         return self.layout.publication_runs / str(publication_id) / "publication.json"
+
+
+class FilesystemSceneTraceBackfillStore:
+    def __init__(self, root: Path) -> None:
+        self.layout = ProjectLayout(root.resolve())
+
+    def create(self, backfill: SceneTraceBackfill) -> None:
+        _create_model(self._path(backfill.plan.backfill_id), backfill)
+
+    def load(self, backfill_id: UUID) -> SceneTraceBackfill:
+        return _load_model(
+            self._path(backfill_id),
+            SceneTraceBackfill,
+            "Scene Trace Backfill",
+        )
+
+    def replace(self, backfill: SceneTraceBackfill) -> None:
+        _replace_model(self._path(backfill.plan.backfill_id), backfill)
+
+    def _path(self, backfill_id: UUID) -> Path:
+        return self.layout.trace_backfill_runs / str(backfill_id) / "backfill.json"
 
 
 def _digest_stem(revision: str) -> str:

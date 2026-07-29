@@ -48,6 +48,10 @@ class ProjectLayout:
         return self.root / "memory" / "scenes"
 
     @property
+    def scene_traces(self) -> Path:
+        return self.root / "memory" / "traces"
+
+    @property
     def runtime(self) -> Path:
         return self.root / ".novel"
 
@@ -80,6 +84,10 @@ class ProjectLayout:
         return self.root / "runs" / "publish"
 
     @property
+    def trace_backfill_runs(self) -> Path:
+        return self.root / "runs" / "trace-backfill"
+
+    @property
     def write_lock(self) -> Path:
         return self.runtime / "locks" / "write.lock"
 
@@ -91,6 +99,7 @@ PROJECT_DIRECTORIES = (
     "manuscript",
     "memory/chapters",
     "memory/scenes",
+    "memory/traces",
     ".novel/locks",
     ".novel/tmp",
 )

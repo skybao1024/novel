@@ -12,10 +12,14 @@ from novel_core import (
     Chapter,
     ChapterSummary,
     Document,
+    DraftEntityMatchCandidate,
+    Entity,
     ProjectCatalogEntry,
     ProjectManifest,
     Scene,
+    SceneEntityOccurrence,
     SceneSummary,
+    SceneTrace,
     SourceRef,
 )
 
@@ -121,3 +125,38 @@ class ExactSceneText:
     @property
     def chapter_id(self) -> UUID:
         return self.chapter.chapter_id
+
+
+@dataclass(frozen=True, slots=True)
+class EntityOccurrenceItem:
+    chapter: Chapter
+    scene: Scene
+    scene_trace: SceneTrace
+    occurrence: SceneEntityOccurrence
+    stale: bool
+
+
+@dataclass(frozen=True, slots=True)
+class EntityLine:
+    entity: Entity
+    occurrences: tuple[EntityOccurrenceItem, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class SceneTraceBackfillSource:
+    project_id: UUID
+    base_canon_revision: str
+    chapter: Chapter
+    scene: Scene
+    document: Document
+    text: str
+    exact_candidates: tuple[DraftEntityMatchCandidate, ...]
+    registry_entities: tuple[Entity, ...]
+    candidate_entities: tuple[Entity, ...]
+    current_trace: SceneTrace | None
+    current_trace_stale: bool | None
+    current_trace_digest: str | None
+
+    @property
+    def source_revision(self) -> str:
+        return self.document.revision

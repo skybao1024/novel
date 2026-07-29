@@ -37,6 +37,7 @@ from novel_adapters.filesystem import (
     FilesystemProjectWriteLock,
     FilesystemPublicationStore,
     FilesystemRunIndexStore,
+    FilesystemSceneTraceBackfillStore,
     FilesystemWritingRunStore,
     default_app_data_directory,
 )
@@ -50,6 +51,7 @@ from novel_application import (
     CanonQueryService,
     ChapterNotFoundError,
     DraftService,
+    EntityResolutionService,
     FullTextSearchUnavailableError,
     IntentService,
     LedgerConflictError,
@@ -82,7 +84,9 @@ from novel_application import (
     RevisionConflictError,
     SceneHistoryAccessError,
     SceneNotFoundError,
+    SceneTraceBackfillService,
     SessionNavigationService,
+    TraceBackfillRecoveryRequiredError,
     WorkflowNotFoundError,
     WorkflowStateError,
     WritingSessionService,
@@ -98,6 +102,7 @@ from novel_core import (
     ProjectCatalogEntry,
     ProjectManifest,
     ReviewRecommendation,
+    SceneTraceDraft,
     StoryTime,
 )
 from novel_core.canon.ledger import LedgerRecord
@@ -138,6 +143,7 @@ class _DiagnosticContext:
             "draft_revision",
             "review_id",
             "publication_id",
+            "backfill_id",
             "chapter_id",
             "scene_id",
             "character_id",
@@ -343,6 +349,8 @@ def _build_parser() -> argparse.ArgumentParser:
     session_show.add_argument("--session-id", type=UUID, required=True)
     session_context = session_sub.add_parser("context")
     session_context.add_argument("--session-id", type=UUID, required=True)
+    session_continuity = session_sub.add_parser("continuity-status")
+    session_continuity.add_argument("--session-id", type=UUID, required=True)
     session_close = session_sub.add_parser("close")
     session_close.add_argument("--session-id", type=UUID, required=True)
 
@@ -391,6 +399,9 @@ def _build_parser() -> argparse.ArgumentParser:
     memory_read.add_argument("--scene-id", type=UUID, required=True)
     memory_read.add_argument("--before-scene", type=UUID)
     memory_read.add_argument("--session-id", type=UUID)
+    memory_entity_line = memory_sub.add_parser("entity-line")
+    memory_entity_line.add_argument("--entity-id", type=UUID, required=True)
+    memory_entity_line.add_argument("--session-id", type=UUID, required=True)
 
     draft = subparsers.add_parser("draft")
     draft_sub = draft.add_subparsers(dest="subcommand", required=True)
@@ -407,6 +418,9 @@ def _build_parser() -> argparse.ArgumentParser:
     draft_diff.add_argument("--session-id", type=UUID, required=True)
     draft_diff.add_argument("--draft-revision", required=True)
     draft_diff.add_argument("--from-revision")
+    draft_candidates = draft_sub.add_parser("entity-candidates")
+    draft_candidates.add_argument("--session-id", type=UUID, required=True)
+    draft_candidates.add_argument("--draft-revision", required=True)
 
     review = subparsers.add_parser("review")
     review_sub = review.add_subparsers(dest="subcommand", required=True)
@@ -435,6 +449,7 @@ def _build_parser() -> argparse.ArgumentParser:
     publish_prepare.add_argument("--draft-revision", required=True)
     publish_prepare.add_argument("--scene-summary", type=Path, required=True)
     publish_prepare.add_argument("--chapter-summary", type=Path, required=True)
+    publish_prepare.add_argument("--scene-trace", type=Path, required=True)
     publish_prepare.add_argument("--review-id", type=UUID, action="append", required=True)
     publish_prepare.add_argument("--scene-main-entity-id", type=UUID, action="append", default=[])
     publish_prepare.add_argument("--scene-key-change", action="append", default=[])
@@ -457,6 +472,28 @@ def _build_parser() -> argparse.ArgumentParser:
     publish_apply.add_argument("--publication-id", type=UUID, required=True)
     publish_recover = publish_sub.add_parser("recover")
     publish_recover.add_argument("--publication-id", type=UUID, required=True)
+
+    trace_backfill = subparsers.add_parser("trace-backfill")
+    trace_backfill_sub = trace_backfill.add_subparsers(dest="subcommand", required=True)
+    trace_backfill_source = trace_backfill_sub.add_parser("source")
+    trace_backfill_source.add_argument("--chapter-id", type=UUID, required=True)
+    trace_backfill_source.add_argument("--scene-id", type=UUID, required=True)
+    trace_backfill_entity_line = trace_backfill_sub.add_parser("entity-line")
+    trace_backfill_entity_line.add_argument("--entity-id", type=UUID, required=True)
+    trace_backfill_prepare = trace_backfill_sub.add_parser("prepare")
+    trace_backfill_prepare.add_argument("--chapter-id", type=UUID, required=True)
+    trace_backfill_prepare.add_argument("--scene-id", type=UUID, required=True)
+    trace_backfill_prepare.add_argument("--source-revision", required=True)
+    trace_backfill_prepare.add_argument("--scene-trace", type=Path, required=True)
+    trace_backfill_inspect = trace_backfill_sub.add_parser("inspect")
+    trace_backfill_inspect.add_argument("--backfill-id", type=UUID, required=True)
+    trace_backfill_approve = trace_backfill_sub.add_parser("approve")
+    trace_backfill_approve.add_argument("--backfill-id", type=UUID, required=True)
+    trace_backfill_approve.add_argument("--approval-digest", required=True)
+    trace_backfill_apply = trace_backfill_sub.add_parser("apply")
+    trace_backfill_apply.add_argument("--backfill-id", type=UUID, required=True)
+    trace_backfill_recover = trace_backfill_sub.add_parser("recover")
+    trace_backfill_recover.add_argument("--backfill-id", type=UUID, required=True)
 
     subparsers.add_parser("rebuild")
 
@@ -547,6 +584,11 @@ def _dispatch(
         if args.subcommand != "inspect":
             _rebuild_projection(services, diagnostic_context)
         return data, ()
+    if args.command == "trace-backfill":
+        data = _trace_backfill_command(args, services)
+        if args.subcommand not in {"source", "entity-line", "inspect"}:
+            _rebuild_projection(services, diagnostic_context)
+        return data, ()
     if args.command == "doctor":
         diagnostic_context.phase = "inspect_project_health"
         status = (
@@ -564,7 +606,14 @@ def _dispatch(
             "issues": list(health.issues),
         }, tuple(health.issues)
     if args.command == "resolve":
-        entities = services.queries.find_entities_by_alias(args.alias)
+        entities = (
+            services.entity_resolution.resolve_existing(
+                args.alias,
+                writing_session_id=args.session_id,
+            )
+            if args.session_id is not None
+            else services.queries.find_entities_by_alias(args.alias)
+        )
         if args.session_id is not None:
             services.session_memory.record_canon_query(
                 args.session_id,
@@ -704,6 +753,8 @@ def _session_command(args: argparse.Namespace, services: _ServiceBundle) -> dict
         return data
     if args.subcommand == "context":
         return services.sessions.context(args.session_id).model_dump(mode="json")
+    if args.subcommand == "continuity-status":
+        return services.sessions.continuity_status(args.session_id).model_dump(mode="json")
     return services.sessions.close(args.session_id).model_dump(mode="json")
 
 
@@ -726,6 +777,11 @@ def _draft_command(args: argparse.Namespace, services: _ServiceBundle) -> dict[s
     if args.subcommand == "show":
         draft, text = services.drafts.show(args.session_id, args.draft_revision)
         return {**draft.model_dump(mode="json"), "text": text}
+    if args.subcommand == "entity-candidates":
+        return services.entity_resolution.draft_candidates(
+            args.session_id,
+            args.draft_revision,
+        ).model_dump(mode="json")
     return {
         "schema_version": SCHEMA_VERSION,
         "writing_session_id": str(args.session_id),
@@ -776,6 +832,7 @@ def _publish_command(args: argparse.Namespace, services: _ServiceBundle) -> dict
             draft_revision=args.draft_revision,
             scene_summary_text=_read_text(args.scene_summary),
             chapter_summary_text=_read_text(args.chapter_summary),
+            scene_trace_draft=_read_model(args.scene_trace, SceneTraceDraft),
             review_refs=tuple(args.review_id),
             scene_main_entity_ids=tuple(args.scene_main_entity_id),
             scene_key_changes=tuple(args.scene_key_change),
@@ -797,6 +854,83 @@ def _publish_command(args: argparse.Namespace, services: _ServiceBundle) -> dict
     else:
         publication = services.publications.recover(args.publication_id)
     return publication.model_dump(mode="json")
+
+
+def _trace_backfill_command(
+    args: argparse.Namespace,
+    services: _ServiceBundle,
+) -> dict[str, Any]:
+    if args.subcommand == "source":
+        source = services.trace_backfills.source(
+            chapter_id=args.chapter_id,
+            scene_id=args.scene_id,
+        )
+        return {
+            "schema_version": SCHEMA_VERSION,
+            "project_id": str(source.project_id),
+            "base_canon_revision": source.base_canon_revision,
+            "chapter": source.chapter.model_dump(mode="json"),
+            "scene": source.scene.model_dump(mode="json"),
+            "document": source.document.model_dump(mode="json"),
+            "source_revision": source.source_revision,
+            "text": source.text,
+            "exact_candidates": [
+                candidate.model_dump(mode="json") for candidate in source.exact_candidates
+            ],
+            "registry_entities": [
+                entity.model_dump(mode="json") for entity in source.registry_entities
+            ],
+            "candidate_entities": [
+                entity.model_dump(mode="json") for entity in source.candidate_entities
+            ],
+            "current_trace": (
+                source.current_trace.model_dump(mode="json")
+                if source.current_trace is not None
+                else None
+            ),
+            "current_trace_stale": source.current_trace_stale,
+            "current_trace_digest": source.current_trace_digest,
+        }
+    if args.subcommand == "entity-line":
+        result = services.trace_backfills.entity_line(args.entity_id)
+        return {
+            "schema_version": SCHEMA_VERSION,
+            "entity": result.entity.model_dump(mode="json"),
+            "occurrences": [
+                {
+                    "chapter": item.chapter.model_dump(mode="json"),
+                    "scene": item.scene.model_dump(mode="json"),
+                    "source_revision": item.scene_trace.source_revision,
+                    "stale": item.stale,
+                    "occurrence": item.occurrence.model_dump(mode="json"),
+                    "mentions": [
+                        mention.model_dump(mode="json")
+                        for mention in item.scene_trace.mentions
+                        if mention.mention_id in item.occurrence.mention_ids
+                    ],
+                }
+                for item in result.occurrences
+            ],
+        }
+    if args.subcommand == "prepare":
+        backfill = services.trace_backfills.prepare(
+            chapter_id=args.chapter_id,
+            scene_id=args.scene_id,
+            source_revision=args.source_revision,
+            scene_trace_draft=_read_model(args.scene_trace, SceneTraceDraft),
+        )
+    elif args.subcommand == "inspect":
+        backfill = services.trace_backfills.inspect(args.backfill_id)
+    elif args.subcommand == "approve":
+        backfill = services.trace_backfills.approve(
+            args.backfill_id,
+            args.approval_digest,
+        )
+    elif args.subcommand == "apply":
+        backfill = services.trace_backfills.apply(args.backfill_id)
+    else:
+        backfill = services.trace_backfills.recover(args.backfill_id)
+    return backfill.model_dump(mode="json")
 
 
 def _project_command(
@@ -971,6 +1105,31 @@ def _memory_command(
                 for item in hits
             ],
         }
+    if args.subcommand == "entity-line":
+        result = services.session_memory.entity_line(
+            args.session_id,
+            args.entity_id,
+        )
+        return {
+            "schema_version": SCHEMA_VERSION,
+            "writing_session_id": str(args.session_id),
+            "entity": result.entity.model_dump(mode="json"),
+            "occurrences": [
+                {
+                    "chapter": item.chapter.model_dump(mode="json"),
+                    "scene": item.scene.model_dump(mode="json"),
+                    "source_revision": item.scene_trace.source_revision,
+                    "stale": item.stale,
+                    "occurrence": item.occurrence.model_dump(mode="json"),
+                    "mentions": [
+                        mention.model_dump(mode="json")
+                        for mention in item.scene_trace.mentions
+                        if mention.mention_id in item.occurrence.mention_ids
+                    ],
+                }
+                for item in result.occurrences
+            ],
+        }
 
     _require_one_boundary(args)
     result = (
@@ -1052,6 +1211,7 @@ class _StorageBundle:
         self.intent_revisions = FilesystemIntentRevisionStore(root)
         self.writing = FilesystemWritingRunStore(root)
         self.publication = FilesystemPublicationStore(root)
+        self.trace_backfill = FilesystemSceneTraceBackfillStore(root)
         self.manuscripts = FilesystemManuscriptStore(root)
         self.navigation_sources = FilesystemNavigationStore(root)
         self.run_index = FilesystemRunIndexStore(root)
@@ -1106,7 +1266,11 @@ class _ServiceBundle:
             memory=self.memory,
             canon=self.queries,
         )
-        self.drafts = DraftService(runs=stores.writing)
+        self.entity_resolution = EntityResolutionService(
+            ledger=stores.ledger,
+            runs=stores.writing,
+        )
+        self.drafts = DraftService(runs=stores.writing, sessions=self.sessions)
         self.reviews = ReviewService(runs=stores.writing)
         self.publications = PublicationService(
             projects=stores.project_store,
@@ -1122,6 +1286,19 @@ class _ServiceBundle:
             write_lock=stores.write_lock,
             sessions=self.sessions,
             intent_service=self.intent,
+            entity_resolution=self.entity_resolution,
+        )
+        self.trace_backfills = SceneTraceBackfillService(
+            projects=stores.project_store,
+            ledger=stores.ledger,
+            projection=stores.projection,
+            manuscripts=stores.manuscripts,
+            navigation_sources=stores.navigation_sources,
+            navigation=projection_queries,
+            canon=self.queries,
+            write_lock=stores.write_lock,
+            backfills=stores.trace_backfill,
+            entity_resolution=self.entity_resolution,
         )
 
 
@@ -1463,6 +1640,8 @@ def _map_error(exc: Exception) -> tuple[str, int]:
         return "revision_conflict", EXIT_CONFLICT
     if isinstance(exc, PublicationRecoveryRequiredError):
         return "publication_recovery_required", EXIT_STORAGE
+    if isinstance(exc, TraceBackfillRecoveryRequiredError):
+        return "trace_backfill_recovery_required", EXIT_STORAGE
     if isinstance(exc, WorkflowStateError):
         return "invalid_workflow_state", EXIT_CONFLICT
     if isinstance(exc, ChapterNotFoundError):

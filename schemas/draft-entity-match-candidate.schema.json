@@ -1,0 +1,47 @@
+{
+  "$id": "https://novel.local/schemas/draft-entity-match-candidate.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "candidate_entity_ids": {
+      "items": {
+        "format": "uuid",
+        "type": "string"
+      },
+      "maxItems": 32,
+      "minItems": 1,
+      "title": "Candidate Entity Ids",
+      "type": "array"
+    },
+    "end_offset": {
+      "minimum": 1,
+      "title": "End Offset",
+      "type": "integer"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "start_offset": {
+      "minimum": 0,
+      "title": "Start Offset",
+      "type": "integer"
+    },
+    "surface_text": {
+      "minLength": 1,
+      "title": "Surface Text",
+      "type": "string"
+    }
+  },
+  "required": [
+    "start_offset",
+    "end_offset",
+    "surface_text",
+    "candidate_entity_ids"
+  ],
+  "title": "DraftEntityMatchCandidate",
+  "type": "object",
+  "x-schema-version": "1.0.0"
+}

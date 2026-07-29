@@ -165,10 +165,12 @@ novel bootstrap start|save|inspect|approve|apply
 novel intent show|prepare|inspect|approve|apply
 novel session start|show|context|close
 novel memory chapters|scenes|search-summaries|read-scene
+novel memory entity-line
 novel query entity|character|events|event-chain|source
-novel draft save|list|show|diff
+novel draft save|list|show|diff|entity-candidates
 novel review save|list|show
 novel publish prepare|inspect|approve|apply|recover
+novel trace-backfill source|entity-line|prepare|inspect|approve|apply|recover
 novel doctor
 novel rebuild
 novel schema show
@@ -189,7 +191,7 @@ Session 中保存的 Narrative Order 边界并自动写入 `retrieved_sources`�
 
 - 多个读取可以并行。
 - 每个项目同一时间只有一个写事务。
-- Bootstrap apply、正式意图修改和 Publish apply 获取项目写锁。
+- Bootstrap apply、正式意图修改、Publish apply 和 Trace Backfill apply 获取项目写锁。
 - 锁文件包含 PID 和随机 token。
 - 只有确认所属进程不存在的有效锁可以自动清理。
 - 锁内重新读取 Manifest、Ledger 和目标文件 revision。
@@ -207,11 +209,16 @@ Session 中保存的 Narrative Order 边界并自动写入 `retrieved_sources`�
 - SourceRef 是否匹配正文；
 - stale 或缺失摘要数量；
 - 未完成 Bootstrap/Publication 事务；
+- 已开始但未完成的 Trace Backfill 事务；
 - 锁是否安全。
 
 已开始但未完成的 Publication 步骤会使 `doctor` 报告不健康，并给出准确 Publication ID
 和步骤状态；`doctor --repair` 只修复可重建投影，不会替代 `publish recover` 猜测或批准
 业务内容。
+
+已经追加 Entity 或安装 Trace 但尚未完成投影的 Backfill 同样使 `doctor` 报告不健康，
+并给出准确 Backfill ID。恢复只能调用
+`trace-backfill recover --backfill-id <id>` 前滚同一批准计划。
 
 `rebuild` 从 Manifest、Intent、Ledger、Chapter、Summary 和运行记录重建新数据库，完成
 校验后再安装。重建失败不能修改权威文件。

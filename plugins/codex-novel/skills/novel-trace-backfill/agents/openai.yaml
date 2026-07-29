@@ -1,0 +1,6 @@
+interface:
+  display_name: "Novel Trace Backfill"
+  short_description: "Review and repair approved Scene entity traces"
+  default_prompt: "Use $novel-trace-backfill to prepare a revision-bound historical Scene Trace and request exact digest approval."
+policy:
+  allow_implicit_invocation: true

@@ -38,6 +38,9 @@ Codex 负责：
 - 写作、审核和多轮修订；
 - 为稳定稿生成 Scene Summary；
 - 聚合或更新 Chapter Summary；
+- 对稳定 Draft 执行人物和地点 Mention 扫描，检查已有 Entity 候选并完成身份消歧；
+- 生成绑定准确 Draft revision 的 Scene Trace；
+- 在作者要求补建历史线路时，读取准确批准 Scene，准备可审查的 Trace Backfill；
 - 提出少量长期重要 Canon；
 - 向作者报告不确定性和仍需决定的问题。
 
@@ -69,6 +72,8 @@ Application/Core 负责：
 - 项目 Bootstrap；
 - 创作意图、结构、正文、导航记忆和关键 Canon 的可靠存储；
 - Writing Session、Draft Revision 和 Review 记录；
+- 已知名称和 Alias 的确定性候选召回、稳定 Entity ID 分配和 Scene Trace 机械校验；
+- 历史 Scene Trace Backfill 的 revision、Diff、Digest、锁和恢复；
 - 为 AI 提供起始创作环境和细粒度查询；
 - 自动记录实际返回的来源；
 - ID、路径、Schema、revision、Diff、Digest、批准和项目锁；
@@ -82,6 +87,7 @@ Application/Core 不负责：
 - 用命中数判断历史信息是否充分；
 - 把摘要或结构化 Canon 的缺失解释为正文中没有发生；
 - 用固定规则代替 AI 审核声音、因果、节奏、情绪和主题。
+- 根据字符串相似度自动判定两个名称属于同一人物、地点或其他 Entity。
 
 ## 3. 多小说业务入口
 
@@ -144,16 +150,28 @@ Application 返回起始环境：
 - 本次任务与目标位置；
 - 相邻 Scene 和当前 Chapter 的导航信息；
 - 重要人物的稀疏 Canon 状态；
+- 新 Chapter 首场所需的准确 Markdown 章标题；
 - 可继续调用的查询能力。
 
-Codex 再按需搜索摘要、读取正式原文或查询关键 Canon。应用不限制查询次数，也不裁决
-信息是否足够。
+Codex 再按需搜索摘要、读取正式原文或查询关键 Canon。除下面有明确边界的连续性窗口外，
+应用不限制查询次数，也不裁决信息是否足够。
 
-Plugin 设定连续性的最低读取规则：只要目标之前存在批准 Scene，Codex 在当前运行首次起草
-正文前必须读取紧邻 Scene 的完整原文；新 Chapter 还要查看上一 Chapter Summary，并读取
-其最后一个批准 Scene 的完整原文。若动作、对话、情绪或其他直接衔接尚未结束，Codex 继续
-读取承载该衔接的相关 Scene。该规则约束 Codex 工作方式，不变成 Application 的查询次数
-门槛。
+Session 起始环境明确返回 `continuity_chapter_id` 和有序
+`continuity_scene_ids`：它们表示 `before_scene_id` 所在 Chapter 中、位于目标 Narrative
+Order 之前的全部批准 Scene。无论这些原文是否已经出现在同一 Codex 任务、先前 Session
+或模型上下文中，当前 Session 都必须逐一执行 Exact Scene Read；Application 只根据当前
+Session 实际记录且 revision 匹配的 `retrieved_sources` 判定。`draft save` 在该窗口未完成
+时拒绝保存。
+
+这项硬约束只保证紧邻章的正式原文确实进入当前 Session，不判断 AI 是否理解充分。更早
+历史仍由 Codex 按 Chapter Summary → Scene Summary → 稳定 ID → 正式原文的路径按需读取；
+动作、对话、情绪、线索或其他依赖延伸到更早位置时继续扩展。若使用 sub-agent，它只能
+辅助定位更早线索，不能替代主写作 Agent 的必读原文、目标正文创作和连续性审核。
+
+当 Session 创建新 Chapter 时，Application 根据项目语言、Chapter number 和 title 生成
+唯一 `required_chapter_heading`。Codex 必须把它原样作为首场 Draft 第一行；已有 Chapter
+的后续 Scene 不重复章标题。Draft 保存、Publish prepare 和 apply/recover 都复验该字段，
+避免结构中的 Chapter title 与正式 manuscript bytes 再次分离。
 
 ### 5.3 写作和审核
 
@@ -175,11 +193,15 @@ revision 并再次审核。
 - 正文候选；
 - Scene Summary；
 - 必要的 Chapter Summary 更新；
+- Scene Trace，包括正文 Mention、候选 Entity、最终身份解析和 Entity 出现记录；
+- 可选的新 Entity，由 Application 分配稳定 ID；
 - 可选 Intent 更新；
 - 可选的少量关键 Canon；
 - Reviewer 结论。
 
-Application 生成正文、导航记忆和 Canon Diff，并计算唯一 approval digest。
+Application 生成正文、导航记忆、Scene Trace、Entity 和 Canon Diff，并计算唯一 approval
+digest。名称精确匹配只作为候选召回；AI 必须把每个纳入 Trace 的 Mention 明确解析为已有
+Entity、新 Entity、匿名或忽略。`ambiguous` 不能进入 Publish Plan。
 
 准备和检查 Publish Plan 不构成批准。只有作者在看到该计划后明确批准准确
 `publication_id + approval_digest`，Plugin 才能 apply。
@@ -190,6 +212,27 @@ Application 生成正文、导航记忆和 Canon Diff，并计算唯一 approval
 可选 Ledger、重建投影并记录事务结果。
 
 发布完成的新 Scene 自动进入下一次创作的导航记忆和正式原文查询范围。
+
+### 5.6 受控回填既有 Scene Trace
+
+升级前已经批准的 Scene 可以没有 Scene Trace。缺失不影响正文权威性，也不能由
+`doctor`、投影重建或固定抽取算法静默补齐。
+
+作者要求回填时，Codex 按 Narrative Order 逐 Scene 处理：
+
+1. Application 通过稳定 Chapter/Scene ID 返回准确批准正文、source revision、当前
+   Trace 和全库名称候选；
+2. Codex 扫描名称、Alias、称谓、代词和描述性 Mention，并明确消歧；
+3. Application 生成 Trace Diff、可选新 Entity Diff、Backfill ID 和 approval digest；
+4. 作者批准准确 ID 与 Digest；
+5. Application 在项目锁内重验正文、Canon 和旧 Trace revision，追加可选 Entity、安装
+   Trace 并重建投影；
+6. 失败时只对同一不可变计划前滚恢复。
+
+Backfill 不是 Writing Session，不受 Writer 的目标前历史读取边界限制，因为它只索引已经
+批准的目标正文，不生成该位置的新叙事。它可以检查完整的当前 Entity Registry 以避免重复
+建档，但任何精确、唯一或模糊命中仍只属于候选。回填不得修改 manuscript、Chapter/Scene
+结构、Intent、Summary、Event 或 Assertion。
 
 ## 6. 完整闭环的判定
 

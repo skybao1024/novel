@@ -257,7 +257,7 @@ def test_schema_version_drift_triggers_projection_rebuild(
         connection.close()
 
     assert status.last_ledger_sequence == 2
-    assert database_version == 2
+    assert database_version == 3
 
 
 def test_removed_migration_history_is_replaced_from_authoritative_files(
@@ -272,10 +272,10 @@ def test_removed_migration_history_is_replaced_from_authoritative_files(
         connection.execute(
             """
             INSERT INTO schema_migrations(version, name, checksum, applied_at)
-            VALUES (3, 'removed_experiment', 'obsolete', '2026-07-26T00:00:00+00:00')
+            VALUES (4, 'removed_experiment', 'obsolete', '2026-07-26T00:00:00+00:00')
             """
         )
-        connection.execute("PRAGMA user_version = 2")
+        connection.execute("PRAGMA user_version = 3")
         connection.commit()
     finally:
         connection.close()
@@ -291,8 +291,12 @@ def test_removed_migration_history_is_replaced_from_authoritative_files(
         connection.close()
 
     assert status.last_ledger_sequence == 2
-    assert migration_rows == [(1, "initial"), (2, "creation_runs")]
-    assert database_version == 2
+    assert migration_rows == [
+        (1, "initial"),
+        (2, "creation_runs"),
+        (3, "scene_traces"),
+    ]
+    assert database_version == 3
 
 
 def _semantic_result(queries: CanonQueryService) -> tuple[object, ...]:

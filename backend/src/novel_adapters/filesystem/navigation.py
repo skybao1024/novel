@@ -14,7 +14,7 @@ from pydantic import ValidationError
 
 from novel_adapters.filesystem.project import ProjectLayout
 from novel_application.errors import NavigationMemoryReadError
-from novel_core import Chapter, ChapterSummary, SceneSummary
+from novel_core import Chapter, ChapterSummary, SceneSummary, SceneTrace
 from novel_core._base import VersionedDomainModel
 
 ModelType = TypeVar("ModelType", bound=VersionedDomainModel)
@@ -33,6 +33,7 @@ class NavigationSourceSnapshot:
     chapters: tuple[Chapter, ...]
     scene_summaries: tuple[SceneSummary, ...]
     chapter_summaries: tuple[ChapterSummary, ...]
+    scene_traces: tuple[SceneTrace, ...]
     revision: str
 
 
@@ -62,10 +63,17 @@ class FilesystemNavigationStore:
             "chapter_id",
             hasher,
         )
+        scene_traces = self._load_models(
+            self.layout.scene_traces,
+            SceneTrace,
+            "scene_id",
+            hasher,
+        )
         return NavigationSourceSnapshot(
             chapters=chapters,
             scene_summaries=scene_summaries,
             chapter_summaries=chapter_summaries,
+            scene_traces=scene_traces,
             revision=f"sha256:{hasher.hexdigest()}",
         )
 
@@ -80,6 +88,9 @@ class FilesystemNavigationStore:
             self.layout.chapter_memory / f"{summary.chapter_id}.json",
             summary,
         )
+
+    def save_scene_trace(self, trace: SceneTrace) -> None:
+        self._replace_model(self.layout.scene_traces / f"{trace.scene_id}.json", trace)
 
     def _load_models(
         self,

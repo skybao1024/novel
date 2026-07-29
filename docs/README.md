@@ -36,6 +36,16 @@ Novel 必须支持以下连续业务：
 - Chapter/Scene Summary 只用于导航，不是 Canon，也不声称完整。
 - Event、Assertion 和人物状态只保存少量长期重要 Canon。
 - SourceRef 只为批准的结构化 Canon 提供准确回指，不构成完整证据链。
-- 应用不使用检索命中数、固定上下文包或结构化记录完整度决定 AI 是否可以写作。
+- 每个新发布 Scene 必须携带绑定准确 Draft revision 的 Scene Trace。名称和 Alias 的精确
+  命中只生成候选，AI 负责结合历史消歧；未解决的歧义不能进入发布计划。
+- Scene Trace 是可修正、可失效的导航索引，只记录已解析 Entity 的出现线路，不把字符串
+  匹配或 AI 抽取结果升级为世界事实。
+- 升级前已经批准但缺少 Scene Trace 的历史 Scene 只能通过独立 Trace Backfill
+  事务补建。回填绑定准确正文 revision，展示 Trace 和可选新 Entity Diff，并经过准确
+  Digest 批准；项目打开、`doctor` 或 SQLite 重建不得自动生成语义记录。
+- 应用不使用任意检索命中数、固定上下文包或结构化记录完整度判断语义是否充分；唯一的
+  写作前读取门槛是当前 Session 对紧邻前场景所在 Chapter 的有界 Exact Scene Read 窗口。
+- 新 Chapter 首场的 Markdown 章标题由 Session 给出准确值，并由 Draft 和 Publish 链路
+  机械校验，不能只依赖 AI 自行保持格式。
 - SQLite 和检索索引可以从正式文件重建，不能成为唯一事实源。
 - 每项新增结构和命令必须服务于已经定义的创作闭环。

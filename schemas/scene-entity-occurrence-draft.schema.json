@@ -1,0 +1,83 @@
+{
+  "$defs": {
+    "EntityPresenceKind": {
+      "enum": [
+        "present",
+        "mentioned",
+        "recalled",
+        "offstage"
+      ],
+      "title": "EntityPresenceKind",
+      "type": "string"
+    },
+    "EntityProminence": {
+      "enum": [
+        "focus",
+        "supporting",
+        "cameo",
+        "background"
+      ],
+      "title": "EntityProminence",
+      "type": "string"
+    }
+  },
+  "$id": "https://novel.local/schemas/scene-entity-occurrence-draft.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "mention_ordinals": {
+      "default": [],
+      "items": {
+        "type": "integer"
+      },
+      "maxItems": 256,
+      "title": "Mention Ordinals",
+      "type": "array"
+    },
+    "new_entity_temporary_name": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "New Entity Temporary Name"
+    },
+    "presence_kind": {
+      "$ref": "#/$defs/EntityPresenceKind"
+    },
+    "prominence": {
+      "$ref": "#/$defs/EntityProminence"
+    },
+    "resolved_entity_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Resolved Entity Id"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "presence_kind",
+    "prominence"
+  ],
+  "title": "SceneEntityOccurrenceDraft",
+  "type": "object",
+  "x-schema-version": "1.0.0"
+}

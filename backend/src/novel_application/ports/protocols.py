@@ -8,6 +8,7 @@ from uuid import UUID
 
 from novel_application.models import (
     AssertionHistoryItem,
+    EntityOccurrenceItem,
     EventOrder,
     ProjectionStatus,
     SummarySearchHit,
@@ -34,6 +35,8 @@ from novel_core import (
     Review,
     Scene,
     SceneSummary,
+    SceneTrace,
+    SceneTraceBackfill,
     SourceRef,
     WritingSession,
 )
@@ -146,6 +149,14 @@ class PublicationStore(Protocol):
     def replace(self, publication: Publication) -> None: ...
 
 
+class SceneTraceBackfillStore(Protocol):
+    def create(self, backfill: SceneTraceBackfill) -> None: ...
+
+    def load(self, backfill_id: UUID) -> SceneTraceBackfill: ...
+
+    def replace(self, backfill: SceneTraceBackfill) -> None: ...
+
+
 class CreationRunStateStore(Protocol):
     def health_issues(self) -> tuple[str, ...]: ...
 
@@ -156,6 +167,8 @@ class NavigationSourceStore(Protocol):
     def save_scene_summary(self, summary: SceneSummary) -> None: ...
 
     def save_chapter_summary(self, summary: ChapterSummary) -> None: ...
+
+    def save_scene_trace(self, trace: SceneTrace) -> None: ...
 
 
 class ProjectionStore(Protocol):
@@ -232,6 +245,18 @@ class NavigationQueryPort(Protocol):
         self,
         scene_id: UUID,
     ) -> tuple[SceneSummary, bool] | None: ...
+
+    def get_scene_trace(
+        self,
+        scene_id: UUID,
+    ) -> tuple[SceneTrace, bool] | None: ...
+
+    def entity_occurrences(
+        self,
+        entity_id: UUID,
+        *,
+        before_narrative_order: int,
+    ) -> tuple[EntityOccurrenceItem, ...]: ...
 
     def search_summaries(
         self,

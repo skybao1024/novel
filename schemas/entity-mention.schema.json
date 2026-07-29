@@ -1,0 +1,119 @@
+{
+  "$defs": {
+    "EntityMentionForm": {
+      "enum": [
+        "name",
+        "alias",
+        "pronoun",
+        "description"
+      ],
+      "title": "EntityMentionForm",
+      "type": "string"
+    },
+    "EntityResolutionStatus": {
+      "enum": [
+        "resolved_existing",
+        "resolved_new",
+        "anonymous",
+        "ignored",
+        "ambiguous"
+      ],
+      "title": "EntityResolutionStatus",
+      "type": "string"
+    }
+  },
+  "$id": "https://novel.local/schemas/entity-mention.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "One revision-bound prose span and its explicit Entity resolution.",
+  "properties": {
+    "considered_entity_ids": {
+      "default": [],
+      "items": {
+        "format": "uuid",
+        "type": "string"
+      },
+      "maxItems": 32,
+      "title": "Considered Entity Ids",
+      "type": "array"
+    },
+    "end_offset": {
+      "minimum": 1,
+      "title": "End Offset",
+      "type": "integer"
+    },
+    "exact_candidate_entity_ids": {
+      "default": [],
+      "items": {
+        "format": "uuid",
+        "type": "string"
+      },
+      "maxItems": 32,
+      "title": "Exact Candidate Entity Ids",
+      "type": "array"
+    },
+    "mention_form": {
+      "$ref": "#/$defs/EntityMentionForm"
+    },
+    "mention_id": {
+      "format": "uuid",
+      "title": "Mention Id",
+      "type": "string"
+    },
+    "mention_ordinal": {
+      "minimum": 1,
+      "title": "Mention Ordinal",
+      "type": "integer"
+    },
+    "resolution_reason": {
+      "minLength": 1,
+      "title": "Resolution Reason",
+      "type": "string"
+    },
+    "resolution_status": {
+      "$ref": "#/$defs/EntityResolutionStatus"
+    },
+    "resolved_entity_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Resolved Entity Id"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "start_offset": {
+      "minimum": 0,
+      "title": "Start Offset",
+      "type": "integer"
+    },
+    "surface_text": {
+      "minLength": 1,
+      "title": "Surface Text",
+      "type": "string"
+    }
+  },
+  "required": [
+    "mention_id",
+    "mention_ordinal",
+    "start_offset",
+    "end_offset",
+    "surface_text",
+    "mention_form",
+    "resolution_status",
+    "resolution_reason"
+  ],
+  "title": "EntityMention",
+  "type": "object",
+  "x-schema-version": "1.0.0"
+}

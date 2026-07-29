@@ -117,6 +117,8 @@ Application 按真实业务能力组织服务，不建立通用工作流框架�
 | `IntentService` | 准备、批准并应用持续演进的创作意图 |
 | `CreationContextService` | 返回 Session 起始环境 |
 | `NavigationMemoryService` | Chapter/Scene 导航、搜索和准确原文读取 |
+| `EntityResolutionService` | 在 Session 边界内召回名称候选并把已消歧 Draft 输入物化为 Scene Trace |
+| `SceneTraceBackfillService` | 为准确批准历史 Scene 准备、批准、应用和恢复 Trace 回填 |
 | `CanonQueryService` | 实体、人物状态、Event 和 SourceRef 查询 |
 | `WritingSessionService` | 建立目标、边界和基础 revision |
 | `DraftService` | 保存和读取不可变 Draft Revision |
@@ -135,6 +137,8 @@ novel bootstrap ...
 novel intent ...
 novel session ...
 novel memory ...
+novel draft entity-candidates ...
+novel trace-backfill ...
 novel query ...
 novel draft ...
 novel review ...
@@ -156,10 +160,36 @@ Application 不向 AI 输出一个声称完备的固定上下文包。它提供�
 3. 准确且带 revision 的正文；
 4. 实际返回来源的自动记录。
 
-Plugin 要求 Codex 在当前运行首次起草前至少读取紧邻的批准 Scene 完整原文；新 Chapter
-还要检查上一 Chapter Summary 和最后一个批准 Scene 完整原文，并在直接衔接未结束时扩展
-读取。除此之外，AI 决定查询顺序、查询次数和停止时机。Application 不把这项 Plugin 行为
-规则实现为查询次数或摘要完整度门槛。
+Creation Context 返回 `before_scene_id` 所在 Chapter 中、位于目标 Narrative Order
+之前的全部批准 Scene ID。当前 Writing Session 必须对这些 ID 逐一完成 revision 匹配的
+Exact Scene Read；`DraftService` 在保存前通过 `WritingSessionService` 验证当前 Session
+的实际 `retrieved_sources`，未完成时拒绝保存。已有 Codex 对话上下文、其他 Session 的
+读取记录或 sub-agent 转述都不能替代它。
+
+该机制只表达一个有界、机械的紧邻章连续性前置条件，不以任意命中数判断语义充分性。
+更早历史仍由 AI 通过摘要定位并按需读取正式原文；AI 决定其查询顺序、扩展范围和停止
+时机。
+
+新 Chapter 的章标题也是机械契约。Application 在 Writing Session 中保存准确
+`required_chapter_heading`，Creation Context 将其交给 Codex，`DraftService` 和
+`PublicationService` 分别在草稿保存、发布准备、应用及恢复时验证正文第一行。标题文字、
+编号、标点和空格不由 Skill 临时推导。
+
+稳定 Draft 的实体解析使用另一条机械边界。Application 在当前 Session 的 Narrative
+Order 边界内，用已有 Entity display name 和 Alias 扫描准确 Draft，返回全部精确命中
+候选；它不根据命中唯一、模糊分数或最近出现自动决定身份。Codex 将精确命中与代词、称谓
+和描述性 Mention 合并，明确解析为已有 Entity、新 Entity、匿名或忽略，再提交
+Scene Trace Draft。Application 校验文本 span、候选覆盖、稳定 ID 和 Draft revision；
+任何 `ambiguous` Mention 都拒绝进入 Publish Plan。
+
+已发布 Scene Trace 进入 Navigation Memory 和 SQLite 可重建投影。它帮助 Entity →
+Scene → Chapter 定位，不是 Canon，也不能代替准确 Scene 原文。
+
+历史 Scene 不通过伪造 Draft 或 Publication 补建 Trace。`SceneTraceBackfillService`
+读取准确批准正文，使用完整当前 Entity Registry 召回候选，生成绑定正文、当前 Canon
+revision 和旧 Trace digest 的不可变计划。Application 仍只校验 span、候选覆盖、ID、
+revision、批准和事务状态；AI 负责身份解析。Backfill 可以在同一批准计划中追加必要的新
+Entity，但不能修改正文、结构、摘要、Intent 或其他 Canon。
 
 ## 6. 本地技术基线
 

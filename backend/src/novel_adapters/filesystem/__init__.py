@@ -14,6 +14,7 @@ from novel_adapters.filesystem.creation import (
     FilesystemIntentStore,
     FilesystemPublicationStore,
     FilesystemRunIndexStore,
+    FilesystemSceneTraceBackfillStore,
     FilesystemWritingRunStore,
     RunSourceSnapshot,
 )
@@ -60,6 +61,7 @@ __all__ = [
     "FilesystemProjectWorkspace",
     "FilesystemProjectWriteLock",
     "FilesystemPublicationStore",
+    "FilesystemSceneTraceBackfillStore",
     "FilesystemRunIndexStore",
     "FilesystemWritingRunStore",
     "NavigationSourceSnapshot",

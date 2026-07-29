@@ -26,20 +26,25 @@ Writing Session 建立后，Application 返回一个 Creation Context：
 - Current Outline 中与目标直接相关的部分；
 - 当前 Chapter 信息；
 - 前一个 Scene 的摘要和正式原文入口；
+- 前一个 Scene 所在 Chapter 的连续性窗口 Chapter ID 和有序 Scene ID；
+- 新 Chapter 首场准确的 `required_chapter_heading`，否则为 `null`；
 - 主要人物的稀疏 Canon 状态；
 - 当前 base revision；
 - 可继续调用的查询能力。
 
-Creation Context 是确定性的起始视图，不声称包含全部相关历史，不作为写作许可。
+Creation Context 是确定性的起始视图，不声称包含全部相关历史。它列出的
+`continuity_scene_ids` 是唯一例外：这些是 `before_scene_id` 所在 Chapter 中、位于目标
+Narrative Order 之前的全部批准 Scene，构成保存 Draft 前的有界必读窗口。
 
-Plugin 在此起点上执行连续性的最低读取规则：只要存在前一个批准 Scene，Codex 在当前运行
-首次起草正文前必须通过 Exact Scene Read 读取其完整原文，摘要和
-`previous_scene_text_available` 不能替代该次读取。新 Chapter 还要检查上一 Chapter
-Summary，并读取其最后一个批准 Scene；如果动作、对话、情绪或其他直接衔接跨越更多
-Scene，则继续读取相关原文。只有全书第一个 Scene 没有前文可读。
+当前 Writing Session 必须逐一执行 Exact Scene Read，并用
+`session continuity-status` 确认 `satisfied: true`。Application 比对 Scene、Document 和
+revision 以及当前 Session 的 `retrieved_sources`；摘要、`previous_scene_text_available`、
+已有模型上下文、其他 Session 记录或 sub-agent 报告都不能替代。本窗口为空时通常表示
+全书第一 Scene。
 
-这是 Codex 的工作流约束，不是 Application 的查询次数门槛。Application 仍不以读取次数
-判断语义是否充分或拒绝 Draft。
+Application 只对这个确定的窗口设置 `draft save` 前置条件，不以更广泛的读取次数、摘要
+完整度或结构化记录数量判断语义充分性。更早历史仍按 Chapter Summary → Scene Summary →
+稳定 ID → 正式原文导航，由 AI 根据动作、对话、情绪、线索等依赖决定是否继续。
 
 ## 3. 分层导航
 
@@ -67,13 +72,31 @@ Scene Summary 只描述一个批准 Scene revision，包含：
 
 摘要不是 Canon，也不声称覆盖全部对话、动作、心理、伏笔或主题。
 
-### 3.2 Chapter Summary
+### 3.2 Scene Trace
+
+Scene Trace 是绑定一个批准 Scene revision 的 Entity 出现线路。它区分：
+
+- 文本 Mention：name、alias、pronoun 或 description；
+- 身份解析：existing、new、anonymous 或 ignored；
+- Scene occurrence：present、mentioned、recalled 或 offstage；
+- prominence：focus、supporting、cameo 或 background。
+
+Application 对准确 Draft 扫描当前 Session 边界内可见的 display name 和 Alias，返回精确
+候选及 span。Codex 结合当前人物、地点、Event 和准确历史原文处理同名、称谓、代词和隐含
+指代。精确候选必须被 Scene Trace Draft 覆盖，但匹配本身不决定身份。
+
+升级前历史 Scene 的 Trace 通过 `trace-backfill source` 读取目标 Scene 的准确批准正文。
+该维护查询不属于 Writing Session，不改变 `retrieved_sources`，并可查看完整当前 Entity
+Registry 以减少重复 Entity；它不得被 Writer 用来绕过 Session Narrative Order 边界。
+回填后的 occurrence 仍只是定位候选，事实判断继续读取准确 Scene 原文。
+
+### 3.3 Chapter Summary
 
 Chapter Summary 从本章当前 Scene Summary 聚合，保存参与的 Scene ID 和摘要 Digest。
 
 它帮助 AI 选择大致章节，不能覆盖 Scene Summary 或正文含义。
 
-### 3.3 Summary Search
+### 3.4 Summary Search
 
 摘要搜索可以使用：
 
@@ -128,6 +151,8 @@ Exact Scene Read 使用稳定 Chapter ID 和 Scene ID。Application 验证：
 Application 提供：
 
 - Entity 名称和 Alias 解析；
+- 绑定 Draft revision 的精确 Entity 候选；
+- Entity 在目标 Narrative Order 之前的 Scene/Chapter 出现线路；
 - 人物在目标 Scene entry/exit 的稀疏状态；
 - 人物知识与 objective 世界事实分离的 Assertion；
 - Event 列表与查找；
@@ -173,13 +198,13 @@ retrieved_at
 
 - 全量 Narrative Beat；
 - 逐句证据链接；
-- 完整人物行为和心理索引；
+- 完整人物行为和心理索引；Scene Trace 只索引 Entity Mention 和出现位置；
 - 自动全局因果图；
 - 完整证据图；
 - 语义充分性门槛。
 
-如果真实长篇评测证明摘要和原文读取无法满足定位需求，再单独评估候选召回改进。任何
-检索增强仍只能定位候选，最终事实来自正式原文和批准 Canon。
+Entity 线路索引是经过批准的有限候选召回增强，不扩展为全量行为或证据图。任何检索增强
+仍只能定位候选，最终事实来自正式原文和批准 Canon。
 
 ## 10. 查询可用性的验收
 

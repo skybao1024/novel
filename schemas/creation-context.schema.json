@@ -289,6 +289,28 @@
       ],
       "default": null
     },
+    "continuity_chapter_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Continuity Chapter Id"
+    },
+    "continuity_scene_ids": {
+      "default": [],
+      "items": {
+        "format": "uuid",
+        "type": "string"
+      },
+      "title": "Continuity Scene Ids",
+      "type": "array"
+    },
     "creative_constraints": {
       "default": [],
       "items": {
@@ -337,6 +359,19 @@
       },
       "title": "Query Capabilities",
       "type": "array"
+    },
+    "required_chapter_heading": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Required Chapter Heading"
     },
     "schema_version": {
       "const": "1.0.0",

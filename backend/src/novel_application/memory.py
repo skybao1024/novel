@@ -13,6 +13,7 @@ from novel_application.errors import (
 from novel_application.models import (
     ChapterSceneItem,
     ChapterSummaryItem,
+    EntityLine,
     ExactSceneText,
     ProjectionStatus,
     SummarySearchHit,
@@ -34,10 +35,12 @@ from novel_core import (
     Scene,
     SceneStatus,
     SceneSummary,
+    SceneTrace,
     chapter_summary_is_stale,
     manuscript_revision,
     replay_ledger,
     scene_summary_is_stale,
+    scene_trace_is_stale,
     validate_chapter_bindings,
 )
 
@@ -222,6 +225,23 @@ class NavigationMemoryService:
             source_refs=source_refs,
         )
 
+    def entity_line_before_order(
+        self,
+        *,
+        entity_id: UUID,
+        before_narrative_order: int,
+    ) -> EntityLine:
+        entity = self._canon.get_entity(entity_id)
+        if entity is None:
+            raise ValueError(f"entity does not exist: {entity_id}")
+        return EntityLine(
+            entity=entity,
+            occurrences=self._navigation.entity_occurrences(
+                entity_id,
+                before_narrative_order=before_narrative_order,
+            ),
+        )
+
     def _require_chapter(self, chapter_id: UUID):
         chapter = self._navigation.get_chapter(chapter_id)
         if chapter is None:
@@ -327,6 +347,43 @@ class NavigationMemoryWriter:
                     "new Chapter Summary dependencies do not match current Scene Summaries"
                 )
             self._sources.save_chapter_summary(summary)
+            return self._rebuild_projection()
+
+    def save_scene_trace(self, trace: SceneTrace) -> ProjectionStatus:
+        with self._write_lock.acquire():
+            chapter = self._navigation.get_chapter(trace.chapter_id)
+            if chapter is None:
+                raise ChapterNotFoundError(
+                    f"Scene Trace Chapter does not exist: {trace.chapter_id}"
+                )
+            scene = self._canon.get_scene(trace.scene_id)
+            if scene is None:
+                raise SceneNotFoundError(f"Scene Trace Scene does not exist: {trace.scene_id}")
+            document = self._canon.get_document(trace.source_document_id)
+            if document is None:
+                raise SceneHistoryAccessError(
+                    f"Scene Trace source Document does not exist: {trace.source_document_id}"
+                )
+            if scene_trace_is_stale(
+                trace,
+                chapter=chapter,
+                scene=scene,
+                document=document,
+            ):
+                raise SceneHistoryAccessError(
+                    "new Scene Trace must bind the current approved Scene revision"
+                )
+            unknown_entities = tuple(
+                occurrence.entity_id
+                for occurrence in trace.entity_occurrences
+                if self._canon.get_entity(occurrence.entity_id) is None
+            )
+            if unknown_entities:
+                raise SceneHistoryAccessError(
+                    "Scene Trace references unknown Entity IDs: "
+                    + ", ".join(str(entity_id) for entity_id in unknown_entities)
+                )
+            self._sources.save_scene_trace(trace)
             return self._rebuild_projection()
 
     def _rebuild_projection(self) -> ProjectionStatus:

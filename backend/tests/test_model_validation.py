@@ -1,17 +1,26 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 import pytest
 from pydantic import ValidationError
 
 from novel_core import (
+    Approval,
     Assertion,
     AssertionScope,
     AssertionStance,
     ChangeSetOperation,
     ChangeSetOperationKind,
+    ContinuitySceneStatus,
+    ContinuityStatus,
     Entity,
+    EntityMention,
+    EntityMentionForm,
+    EntityPresenceKind,
+    EntityProminence,
+    EntityResolutionStatus,
     EventEdge,
     EventEdgeType,
     ObjectKind,
@@ -19,13 +28,56 @@ from novel_core import (
     ProjectCatalogEntry,
     ProjectStatus,
     Proposition,
+    SceneEntityOccurrence,
+    SceneTrace,
+    SceneTraceBackfill,
+    SceneTraceBackfillPlan,
+    SceneTraceBackfillStatus,
     StoryTime,
     StoryTimeKind,
+    chapter_heading,
 )
 
 
 def ordinal_time(value: int) -> StoryTime:
     return StoryTime(kind=StoryTimeKind.ORDINAL, story_time_start=value)
+
+
+@pytest.mark.parametrize(
+    ("chapter_number", "expected"),
+    [
+        (1, "# 第一章　县在纸外"),
+        (10, "# 第十章　县在纸外"),
+        (11, "# 第十一章　县在纸外"),
+        (20, "# 第二十章　县在纸外"),
+        (101, "# 第一百零一章　县在纸外"),
+        (1001, "# 第一千零一章　县在纸外"),
+        (10000, "# 第10000章　县在纸外"),
+    ],
+)
+def test_chinese_chapter_heading_is_deterministic(
+    chapter_number: int,
+    expected: str,
+) -> None:
+    assert (
+        chapter_heading(
+            language="zh-CN",
+            chapter_number=chapter_number,
+            title="县在纸外",
+        )
+        == expected
+    )
+
+
+def test_non_chinese_chapter_heading_is_deterministic() -> None:
+    assert (
+        chapter_heading(
+            language="en",
+            chapter_number=2,
+            title="Outside the County",
+        )
+        == "# Chapter 2: Outside the County"
+    )
 
 
 def test_contract_enums_cover_every_locked_value() -> None:
@@ -67,6 +119,127 @@ def test_entity_id_cannot_be_a_display_name() -> None:
     )
     with pytest.raises(ValidationError, match="UUID"):
         Entity.model_validate_json(payload)
+
+
+def test_scene_trace_requires_resolved_mentions_to_link_to_one_occurrence() -> None:
+    entity_id = uuid4()
+    mention = EntityMention(
+        mention_id=uuid4(),
+        mention_ordinal=1,
+        start_offset=0,
+        end_offset=2,
+        surface_text="沈砚",
+        mention_form=EntityMentionForm.NAME,
+        exact_candidate_entity_ids=(entity_id,),
+        considered_entity_ids=(entity_id,),
+        resolution_status=EntityResolutionStatus.RESOLVED_EXISTING,
+        resolved_entity_id=entity_id,
+        resolution_reason="唯一候选并与上下文一致。",
+    )
+    occurrence = SceneEntityOccurrence(
+        occurrence_id=uuid4(),
+        entity_id=entity_id,
+        presence_kind=EntityPresenceKind.PRESENT,
+        prominence=EntityProminence.FOCUS,
+        mention_ids=(mention.mention_id,),
+    )
+    trace = SceneTrace(
+        scene_trace_id=uuid4(),
+        scene_id=uuid4(),
+        chapter_id=uuid4(),
+        source_document_id=uuid4(),
+        source_revision="sha256:" + "1" * 64,
+        mentions=(mention,),
+        entity_occurrences=(occurrence,),
+    )
+    assert SceneTrace.from_json(trace.to_canonical_json()) == trace
+
+    with pytest.raises(ValidationError, match="every resolved Entity Mention"):
+        SceneTrace(
+            scene_trace_id=uuid4(),
+            scene_id=trace.scene_id,
+            chapter_id=trace.chapter_id,
+            source_document_id=trace.source_document_id,
+            source_revision=trace.source_revision,
+            mentions=(mention,),
+        )
+
+
+def test_published_scene_trace_rejects_ambiguous_mentions() -> None:
+    with pytest.raises(ValidationError, match="ambiguous"):
+        SceneTrace(
+            scene_trace_id=uuid4(),
+            scene_id=uuid4(),
+            chapter_id=uuid4(),
+            source_document_id=uuid4(),
+            source_revision="sha256:" + "2" * 64,
+            mentions=(
+                EntityMention(
+                    mention_id=uuid4(),
+                    mention_ordinal=1,
+                    start_offset=0,
+                    end_offset=2,
+                    surface_text="沈砚",
+                    mention_form=EntityMentionForm.NAME,
+                    considered_entity_ids=(uuid4(), uuid4()),
+                    resolution_status=EntityResolutionStatus.AMBIGUOUS,
+                    resolution_reason="两个同名人物均可能成立。",
+                ),
+            ),
+        )
+
+
+def test_scene_trace_backfill_binds_exact_trace_and_approval() -> None:
+    trace = SceneTrace(
+        scene_trace_id=uuid4(),
+        scene_id=uuid4(),
+        chapter_id=uuid4(),
+        source_document_id=uuid4(),
+        source_revision="sha256:" + "3" * 64,
+    )
+    backfill_id = uuid4()
+    approval_value = "sha256:" + "4" * 64
+    plan = SceneTraceBackfillPlan(
+        backfill_id=backfill_id,
+        project_id=uuid4(),
+        chapter_id=trace.chapter_id,
+        scene_id=trace.scene_id,
+        source_document_id=trace.source_document_id,
+        source_revision=trace.source_revision,
+        base_canon_revision="sha256:" + "5" * 64,
+        scene_trace_change=trace,
+        scene_trace_diff="--- /dev/null\n+++ scene-trace\n",
+        approval_digest=approval_value,
+        prepared_at=datetime.now(UTC),
+    )
+    prepared = SceneTraceBackfill(
+        plan=plan,
+        status=SceneTraceBackfillStatus.PREPARED,
+    )
+    assert SceneTraceBackfill.from_json(prepared.to_canonical_json()) == prepared
+
+    approved = SceneTraceBackfill(
+        plan=plan,
+        status=SceneTraceBackfillStatus.APPROVED,
+        approval=Approval(
+            operation_id=backfill_id,
+            approval_digest=approval_value,
+            approved_at=datetime.now(UTC),
+        ),
+    )
+    assert approved.approval is not None
+    with pytest.raises(ValidationError, match="exact approval"):
+        SceneTraceBackfill(
+            plan=plan,
+            status=SceneTraceBackfillStatus.APPROVED,
+        )
+    with pytest.raises(ValidationError, match="cannot contain Canon Diff"):
+        SceneTraceBackfillPlan(
+            **{
+                **plan.model_dump(),
+                "canon_diff": "+ entity:unexpected",
+            }
+        )
 
 
 def test_story_time_accepts_every_locked_representation() -> None:
@@ -236,4 +409,42 @@ def test_project_catalog_is_strict_unique_and_round_trips() -> None:
                 entry,
                 entry.model_copy(update={"project_id": uuid4()}),
             )
+        )
+
+
+def test_continuity_status_is_consistent_and_round_trips() -> None:
+    chapter_id = uuid4()
+    missing_scene_id = uuid4()
+    scene = ContinuitySceneStatus(
+        chapter_id=chapter_id,
+        scene_id=missing_scene_id,
+        document_id=uuid4(),
+        document_revision=f"sha256:{'1' * 64}",
+        narrative_order=1,
+        satisfied=False,
+    )
+    status = ContinuityStatus(
+        writing_session_id=uuid4(),
+        continuity_chapter_id=chapter_id,
+        required_scenes=(scene,),
+        missing_scene_ids=(missing_scene_id,),
+        satisfied=False,
+    )
+
+    assert ContinuityStatus.from_json(status.to_canonical_json()) == status
+    with pytest.raises(ValidationError, match="missing_scene_ids"):
+        ContinuityStatus(
+            writing_session_id=status.writing_session_id,
+            continuity_chapter_id=chapter_id,
+            required_scenes=(scene,),
+            missing_scene_ids=(),
+            satisfied=True,
+        )
+    with pytest.raises(ValidationError, match="satisfaction"):
+        ContinuitySceneStatus.model_validate(
+            {
+                **scene.model_dump(),
+                "retrieved_source_ids": (uuid4(),),
+                "satisfied": False,
+            }
         )

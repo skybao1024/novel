@@ -15,7 +15,16 @@ from novel_core.canon import CanonLedgerEntry
 from novel_core.chronology import StoryTime
 from novel_core.identity import Entity
 from novel_core.identity.models import EntityType
-from novel_core.navigation import Chapter, ChapterSummary, SceneSummary
+from novel_core.navigation import (
+    Chapter,
+    ChapterSummary,
+    EntityMentionForm,
+    EntityPresenceKind,
+    EntityProminence,
+    EntityResolutionStatus,
+    SceneSummary,
+    SceneTrace,
+)
 from novel_core.projects import Document, Scene
 
 NonEmptyText = Annotated[str, StringConstraints(min_length=1)]
@@ -228,6 +237,7 @@ class WritingSession(VersionedDomainModel):
     target_chapter_id: UUID
     target_chapter_number: int = Field(ge=1)
     target_chapter_title: NonEmptyText
+    required_chapter_heading: NonEmptyText | None = None
     target_narrative_order: int = Field(ge=1)
     target_story_time: StoryTime
     pov_entity_id: UUID | None = None
@@ -261,6 +271,7 @@ class WritingSession(VersionedDomainModel):
 class RetrievalKind(StrEnum):
     CHAPTER_SUMMARY = "chapter_summary"
     SCENE_SUMMARY = "scene_summary"
+    SCENE_TRACE = "scene_trace"
     EXACT_SCENE = "exact_scene"
     CANON_QUERY = "canon_query"
 
@@ -277,6 +288,59 @@ class RetrievedSource(VersionedDomainModel):
     retrieved_at: AwareDatetime
 
 
+class ContinuitySceneStatus(VersionedDomainModel):
+    chapter_id: UUID
+    scene_id: UUID
+    document_id: UUID
+    document_revision: Sha256Digest
+    narrative_order: int = Field(ge=1)
+    retrieved_source_ids: tuple[UUID, ...] = ()
+    satisfied: bool
+
+    @model_validator(mode="after")
+    def validate_state(self) -> ContinuitySceneStatus:
+        if len(self.retrieved_source_ids) != len(set(self.retrieved_source_ids)):
+            raise ValueError("Continuity retrieved_source_ids must be unique")
+        if self.satisfied != bool(self.retrieved_source_ids):
+            raise ValueError("Continuity Scene satisfaction must match exact retrieved sources")
+        return self
+
+
+class ContinuityStatus(VersionedDomainModel):
+    writing_session_id: UUID
+    continuity_chapter_id: UUID | None = None
+    required_scenes: tuple[ContinuitySceneStatus, ...] = ()
+    missing_scene_ids: tuple[UUID, ...] = ()
+    satisfied: bool
+
+    @model_validator(mode="after")
+    def validate_state(self) -> ContinuityStatus:
+        if not self.required_scenes:
+            if self.continuity_chapter_id is not None:
+                raise ValueError("empty continuity window cannot identify a Chapter")
+        else:
+            if self.continuity_chapter_id is None:
+                raise ValueError("continuity window requires a Chapter")
+            if any(
+                scene.chapter_id != self.continuity_chapter_id for scene in self.required_scenes
+            ):
+                raise ValueError("continuity Scenes must belong to the continuity Chapter")
+        scene_ids = tuple(scene.scene_id for scene in self.required_scenes)
+        if len(scene_ids) != len(set(scene_ids)):
+            raise ValueError("continuity window contains duplicate Scenes")
+        orders = tuple(scene.narrative_order for scene in self.required_scenes)
+        if orders != tuple(sorted(orders)) or len(orders) != len(set(orders)):
+            raise ValueError("continuity Scenes must have unique ascending Narrative Order")
+        expected_missing = tuple(
+            scene.scene_id for scene in self.required_scenes if not scene.satisfied
+        )
+        if self.missing_scene_ids != expected_missing:
+            raise ValueError("missing_scene_ids must match unsatisfied continuity Scenes")
+        if self.satisfied != (not expected_missing):
+            raise ValueError("continuity satisfaction must match missing_scene_ids")
+        return self
+
+
 class CreationContext(VersionedDomainModel):
     project_id: UUID
     writing_session_id: UUID
@@ -285,6 +349,7 @@ class CreationContext(VersionedDomainModel):
     target_scene_id: UUID
     target_chapter_id: UUID
     target_narrative_order: int = Field(ge=1)
+    required_chapter_heading: NonEmptyText | None = None
     before_scene_id: UUID | None = None
     after_scene_id: UUID | None = None
     base_canon_revision: Sha256Digest
@@ -293,8 +358,18 @@ class CreationContext(VersionedDomainModel):
     chapter: Chapter | None = None
     previous_scene_summary: SceneSummary | None = None
     previous_scene_text_available: bool = False
+    continuity_chapter_id: UUID | None = None
+    continuity_scene_ids: tuple[UUID, ...] = ()
     important_entities: tuple[Entity, ...] = ()
     query_capabilities: tuple[str, ...]
+
+    @model_validator(mode="after")
+    def validate_continuity_window(self) -> CreationContext:
+        if len(self.continuity_scene_ids) != len(set(self.continuity_scene_ids)):
+            raise ValueError("continuity_scene_ids must be unique")
+        if bool(self.continuity_scene_ids) != (self.continuity_chapter_id is not None):
+            raise ValueError("continuity Chapter and Scene IDs must be present together")
+        return self
 
 
 class DraftRevision(VersionedDomainModel):
@@ -311,6 +386,181 @@ class DraftRevision(VersionedDomainModel):
             raise ValueError("Draft revision must equal its exact content digest")
         if self.parent_revision == self.draft_revision:
             raise ValueError("Draft cannot be its own parent")
+        return self
+
+
+class SceneTraceEntityDraft(VersionedDomainModel):
+    temporary_name: NonEmptyText
+    entity_type: EntityType
+    display_name: NonEmptyText
+
+
+class EntityMentionDraft(VersionedDomainModel):
+    mention_ordinal: int = Field(ge=1)
+    start_offset: int = Field(ge=0)
+    end_offset: int = Field(ge=1)
+    surface_text: NonEmptyText
+    mention_form: EntityMentionForm
+    resolution_status: EntityResolutionStatus
+    considered_entity_ids: Annotated[tuple[UUID, ...], Field(max_length=32)] = ()
+    resolved_entity_id: UUID | None = None
+    new_entity_temporary_name: NonEmptyText | None = None
+    resolution_reason: NonEmptyText
+
+    @model_validator(mode="after")
+    def validate_resolution(self) -> EntityMentionDraft:
+        if self.end_offset <= self.start_offset:
+            raise ValueError("Entity Mention Draft end_offset must be after start_offset")
+        if len(self.considered_entity_ids) != len(set(self.considered_entity_ids)):
+            raise ValueError("Entity Mention Draft considered IDs must be unique")
+        if self.resolution_status is EntityResolutionStatus.RESOLVED_EXISTING:
+            if (
+                self.resolved_entity_id is None
+                or self.new_entity_temporary_name is not None
+                or self.resolved_entity_id not in self.considered_entity_ids
+            ):
+                raise ValueError(
+                    "existing Entity resolution requires one considered resolved_entity_id"
+                )
+        elif self.resolution_status is EntityResolutionStatus.RESOLVED_NEW:
+            if self.resolved_entity_id is not None or self.new_entity_temporary_name is None:
+                raise ValueError("new Entity resolution requires a temporary Entity name")
+        elif self.resolved_entity_id is not None or self.new_entity_temporary_name is not None:
+            raise ValueError("unresolved or unlinked Mention cannot identify an Entity")
+        return self
+
+
+class SceneEntityOccurrenceDraft(VersionedDomainModel):
+    resolved_entity_id: UUID | None = None
+    new_entity_temporary_name: NonEmptyText | None = None
+    presence_kind: EntityPresenceKind
+    prominence: EntityProminence
+    mention_ordinals: Annotated[tuple[int, ...], Field(max_length=256)] = ()
+
+    @model_validator(mode="after")
+    def validate_reference(self) -> SceneEntityOccurrenceDraft:
+        if (self.resolved_entity_id is None) == (self.new_entity_temporary_name is None):
+            raise ValueError("Scene occurrence Draft requires exactly one Entity reference")
+        if len(self.mention_ordinals) != len(set(self.mention_ordinals)):
+            raise ValueError("Scene occurrence Draft mention ordinals must be unique")
+        if any(ordinal < 1 for ordinal in self.mention_ordinals):
+            raise ValueError("Scene occurrence Draft mention ordinals must be positive")
+        return self
+
+
+class SceneTraceDraft(VersionedDomainModel):
+    new_entities: Annotated[tuple[SceneTraceEntityDraft, ...], Field(max_length=64)] = ()
+    mentions: Annotated[tuple[EntityMentionDraft, ...], Field(max_length=512)] = ()
+    entity_occurrences: Annotated[
+        tuple[SceneEntityOccurrenceDraft, ...],
+        Field(max_length=256),
+    ] = ()
+    scan_notes: TextTuple = ()
+
+    @model_validator(mode="after")
+    def validate_trace(self) -> SceneTraceDraft:
+        temporary_names = tuple(item.temporary_name for item in self.new_entities)
+        if len(temporary_names) != len(set(temporary_names)):
+            raise ValueError("Scene Trace new Entity temporary names must be unique")
+        known_temporary_names = set(temporary_names)
+
+        mention_ordinals = tuple(item.mention_ordinal for item in self.mentions)
+        spans = tuple((item.start_offset, item.end_offset) for item in self.mentions)
+        if mention_ordinals != tuple(range(1, len(self.mentions) + 1)):
+            raise ValueError("Scene Trace Draft mention ordinals must be contiguous and ordered")
+        if len(spans) != len(set(spans)):
+            raise ValueError("Scene Trace Draft Mention spans must be unique")
+        mentions_by_ordinal = {item.mention_ordinal: item for item in self.mentions}
+        for mention in self.mentions:
+            if (
+                mention.new_entity_temporary_name is not None
+                and mention.new_entity_temporary_name not in known_temporary_names
+            ):
+                raise ValueError("Entity Mention Draft references an unknown new Entity")
+
+        occurrence_keys: list[tuple[str, str]] = []
+        linked_ordinals: list[int] = []
+        used_temporary_names: set[str] = set()
+        for occurrence in self.entity_occurrences:
+            if occurrence.resolved_entity_id is not None:
+                occurrence_key = ("existing", str(occurrence.resolved_entity_id))
+            else:
+                temporary_name = str(occurrence.new_entity_temporary_name)
+                if temporary_name not in known_temporary_names:
+                    raise ValueError("Scene occurrence Draft references an unknown new Entity")
+                occurrence_key = ("new", temporary_name)
+                used_temporary_names.add(temporary_name)
+            occurrence_keys.append(occurrence_key)
+            for ordinal in occurrence.mention_ordinals:
+                mention = mentions_by_ordinal.get(ordinal)
+                if mention is None:
+                    raise ValueError("Scene occurrence Draft references an unknown Mention")
+                if occurrence.resolved_entity_id is not None:
+                    if (
+                        mention.resolution_status is not EntityResolutionStatus.RESOLVED_EXISTING
+                        or mention.resolved_entity_id != occurrence.resolved_entity_id
+                    ):
+                        raise ValueError(
+                            "Scene occurrence existing Entity must match its Mention resolutions"
+                        )
+                elif (
+                    mention.resolution_status is not EntityResolutionStatus.RESOLVED_NEW
+                    or mention.new_entity_temporary_name != occurrence.new_entity_temporary_name
+                ):
+                    raise ValueError(
+                        "Scene occurrence new Entity must match its Mention resolutions"
+                    )
+                linked_ordinals.append(ordinal)
+
+        if len(occurrence_keys) != len(set(occurrence_keys)):
+            raise ValueError("Scene Trace Draft can contain only one occurrence per Entity")
+        if len(linked_ordinals) != len(set(linked_ordinals)):
+            raise ValueError("resolved Mention Draft can belong to only one occurrence")
+        resolved_ordinals = {
+            mention.mention_ordinal
+            for mention in self.mentions
+            if mention.resolution_status
+            in {
+                EntityResolutionStatus.RESOLVED_EXISTING,
+                EntityResolutionStatus.RESOLVED_NEW,
+            }
+        }
+        if set(linked_ordinals) != resolved_ordinals:
+            raise ValueError("every resolved Mention Draft must belong to one occurrence")
+        if used_temporary_names != known_temporary_names:
+            raise ValueError("every new Scene Trace Entity must have one occurrence")
+        return self
+
+
+class DraftEntityMatchCandidate(VersionedDomainModel):
+    start_offset: int = Field(ge=0)
+    end_offset: int = Field(ge=1)
+    surface_text: NonEmptyText
+    candidate_entity_ids: Annotated[tuple[UUID, ...], Field(min_length=1, max_length=32)]
+
+    @model_validator(mode="after")
+    def validate_match(self) -> DraftEntityMatchCandidate:
+        if self.end_offset <= self.start_offset:
+            raise ValueError("Entity candidate end_offset must be after start_offset")
+        if len(self.candidate_entity_ids) != len(set(self.candidate_entity_ids)):
+            raise ValueError("Entity candidate IDs must be unique")
+        return self
+
+
+class DraftEntityCandidates(VersionedDomainModel):
+    writing_session_id: UUID
+    draft_revision: Sha256Digest
+    matches: Annotated[tuple[DraftEntityMatchCandidate, ...], Field(max_length=512)] = ()
+
+    @model_validator(mode="after")
+    def validate_matches(self) -> DraftEntityCandidates:
+        keys = tuple(
+            (item.start_offset, item.end_offset, item.surface_text) for item in self.matches
+        )
+        if len(keys) != len(set(keys)):
+            raise ValueError("Draft Entity candidates cannot contain duplicate spans")
+        if keys != tuple(sorted(keys)):
+            raise ValueError("Draft Entity candidates must be ordered by text span")
         return self
 
 
@@ -351,6 +601,7 @@ class PublicationPlan(VersionedDomainModel):
     chapter_change: Chapter
     scene_summary_change: SceneSummary
     chapter_summary_change: ChapterSummary
+    scene_trace_change: SceneTrace | None = None
     intent_revision_id: UUID | None = None
     intent_candidate_revision: Sha256Digest | None = None
     ledger_entry: CanonLedgerEntry
@@ -359,6 +610,7 @@ class PublicationPlan(VersionedDomainModel):
     manuscript_diff: NonEmptyText
     structure_diff: NonEmptyText
     summary_diff: NonEmptyText
+    scene_trace_diff: NonEmptyText | None = None
     intent_diff: str | None = None
     canon_diff: NonEmptyText
     unresolved_questions: TextTuple = ()
@@ -384,6 +636,17 @@ class PublicationPlan(VersionedDomainModel):
             or scene_summary.source_revision != document.revision
         ):
             raise ValueError("Scene Summary must bind the exact published Scene revision")
+        if (self.scene_trace_change is None) != (self.scene_trace_diff is None):
+            raise ValueError("Scene Trace change and Diff must be present together")
+        if self.scene_trace_change is not None:
+            trace = self.scene_trace_change
+            if (
+                trace.scene_id != scene.scene_id
+                or trace.chapter_id != chapter.chapter_id
+                or trace.source_document_id != document.document_id
+                or trace.source_revision != document.revision
+            ):
+                raise ValueError("Scene Trace must bind the exact published Scene revision")
         if self.intent_revision_id is None and self.intent_candidate_revision is not None:
             raise ValueError("Intent candidate revision requires intent_revision_id")
         if self.intent_revision_id is not None and self.intent_candidate_revision is None:
@@ -425,4 +688,76 @@ class Publication(VersionedDomainModel):
             raise ValueError("completed Publication requires completed_at")
         if self.status is not PublicationStatus.COMPLETED and self.completed_at is not None:
             raise ValueError("only completed Publication can contain completed_at")
+        return self
+
+
+class SceneTraceBackfillPlan(VersionedDomainModel):
+    backfill_id: UUID
+    project_id: UUID
+    chapter_id: UUID
+    scene_id: UUID
+    source_document_id: UUID
+    source_revision: Sha256Digest
+    base_canon_revision: Sha256Digest
+    base_scene_trace_digest: Sha256Digest | None = None
+    scene_trace_change: SceneTrace
+    ledger_entry: CanonLedgerEntry | None = None
+    scene_trace_diff: NonEmptyText
+    canon_diff: str = ""
+    approval_digest: Sha256Digest
+    prepared_at: AwareDatetime
+
+    @model_validator(mode="after")
+    def validate_bindings(self) -> SceneTraceBackfillPlan:
+        trace = self.scene_trace_change
+        if (
+            trace.chapter_id != self.chapter_id
+            or trace.scene_id != self.scene_id
+            or trace.source_document_id != self.source_document_id
+            or trace.source_revision != self.source_revision
+        ):
+            raise ValueError("Trace Backfill must bind the exact approved Scene revision")
+        if self.ledger_entry is None:
+            if self.canon_diff:
+                raise ValueError("Trace Backfill without a Ledger entry cannot contain Canon Diff")
+            return self
+        if self.ledger_entry.base_revision != self.base_canon_revision:
+            raise ValueError("Trace Backfill Ledger entry must bind base_canon_revision")
+        if self.ledger_entry.source_scene_id != self.scene_id:
+            raise ValueError("Trace Backfill Ledger entry must bind the target Scene")
+        if any(record.record_type != "entity" for record in self.ledger_entry.records):
+            raise ValueError("Trace Backfill Ledger entry can contain only new Entities")
+        if not self.canon_diff:
+            raise ValueError("Trace Backfill Ledger entry requires Canon Diff")
+        return self
+
+
+class SceneTraceBackfillStatus(StrEnum):
+    PREPARED = "prepared"
+    APPROVED = "approved"
+    LEDGER_APPENDED = "ledger_appended"
+    TRACE_INSTALLED = "trace_installed"
+    PROJECTION_REBUILT = "projection_rebuilt"
+    COMPLETED = "completed"
+
+
+class SceneTraceBackfill(VersionedDomainModel):
+    plan: SceneTraceBackfillPlan
+    status: SceneTraceBackfillStatus
+    approval: Approval | None = None
+    completed_at: AwareDatetime | None = None
+
+    @model_validator(mode="after")
+    def validate_state(self) -> SceneTraceBackfill:
+        if self.status is not SceneTraceBackfillStatus.PREPARED:
+            if self.approval is None or self.approval.operation_id != self.plan.backfill_id:
+                raise ValueError("started Trace Backfill requires its exact approval")
+            if self.approval.approval_digest != self.plan.approval_digest:
+                raise ValueError("Trace Backfill approval digest does not match the plan")
+        elif self.approval is not None:
+            raise ValueError("prepared Trace Backfill cannot contain approval")
+        if self.status is SceneTraceBackfillStatus.COMPLETED and self.completed_at is None:
+            raise ValueError("completed Trace Backfill requires completed_at")
+        if self.status is not SceneTraceBackfillStatus.COMPLETED and self.completed_at is not None:
+            raise ValueError("only completed Trace Backfill can contain completed_at")
         return self

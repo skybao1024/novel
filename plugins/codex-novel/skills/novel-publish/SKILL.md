@@ -1,6 +1,6 @@
 ---
 name: novel-publish
-description: Prepare, inspect, explicitly approve, apply, and recover an exact Novel Scene publication. Use when a Writing Session has a stable Draft Revision and Review and Codex must generate navigation summaries and optional Intent or sparse Canon changes without bypassing the author's digest approval.
+description: Prepare, inspect, explicitly approve, apply, and recover an exact Novel Scene publication including its resolved Scene Trace. Use when a Writing Session has a stable Draft Revision, Entity resolution, and Review and Codex must generate navigation summaries and optional Intent or sparse Canon changes without bypassing the author's digest approval.
 ---
 
 # Novel Publish
@@ -28,8 +28,11 @@ workspace, directly in the project top level, or inside formal `memory/`, `canon
 ## Prepare
 
 1. Confirm the exact open Session, Draft revision, and one or more Reviews.
-2. Generate a UTF-8 Scene Summary that describes only the candidate Scene and a UTF-8 Chapter
-   Summary that aggregates the Chapter. Optionally prepare an approved Intent Revision ID and a
+2. Generate a UTF-8 Scene Summary that describes only the candidate Scene, a UTF-8 Chapter
+   Summary that aggregates the Chapter, and a versioned Scene Trace Draft for the exact Draft
+   revision. The Trace must cover every `draft entity-candidates` hit, include AI-found pronoun,
+   title, and description Mentions, contain no `ambiguous` resolution, and link every resolved
+   Mention to one Entity occurrence. Optionally prepare an approved Intent Revision ID and a
    versioned JSON array of sparse Canon Ledger records. Store all generated input files in the
    project-local publication candidate directory.
 3. Call:
@@ -38,15 +41,17 @@ workspace, directly in the project top level, or inside formal `memory/`, `canon
    novel --project <root> publish prepare \
      --session-id <id> --draft-revision <revision> \
      --scene-summary <text-file> --chapter-summary <text-file> \
+     --scene-trace <json-file> \
      --review-id <id> --json
    ```
 
    Add main Entity IDs, key changes, open questions, `--intent-revision-id`, or
    `--canon-records` only when they are accurate. The Application derives Summary bindings,
    Document/Scene IDs, revisions, and dependency digests.
-4. Run `publish inspect --publication-id <id>`. Present the manuscript, structure, Summary,
-   optional Intent, Canon Diffs, Review conclusions, unresolved questions, exact Publication ID,
-   and approval digest. Ask the author to approve that exact pair, then stop and wait.
+4. Run `publish inspect --publication-id <id>`. Present the manuscript, structure, Summary, Scene
+   Trace, Mention resolutions, new Entity assignments, optional Intent, Canon Diffs, Review
+   conclusions, unresolved questions, exact Publication ID, and approval digest. Ask the author to
+   approve that exact pair, then stop and wait.
 
 When `$novel-writing` hands off a `ready` Review, complete Prepare and Inspect in that same Codex
 turn. Do not stop after merely reporting that the Scene is ready or unpublished, and do not defer
@@ -64,6 +69,9 @@ the already approved steps. Repeat recovery only for the same immutable plan.
 Never interpret “continue writing”, ordinary Draft feedback, or Review recommendation as publish
 approval. Never edit manuscript, navigation memory, Intent, Ledger, transaction state, or SQLite
 directly.
+
+Do not republish an approved historical Scene only to add or correct its Scene Trace. Route that
+explicit maintenance request to `$novel-trace-backfill`.
 
 ## Diagnostics
 

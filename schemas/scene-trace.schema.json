@@ -1,0 +1,259 @@
+{
+  "$defs": {
+    "EntityMention": {
+      "additionalProperties": false,
+      "description": "One revision-bound prose span and its explicit Entity resolution.",
+      "properties": {
+        "considered_entity_ids": {
+          "default": [],
+          "items": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Considered Entity Ids",
+          "type": "array"
+        },
+        "end_offset": {
+          "minimum": 1,
+          "title": "End Offset",
+          "type": "integer"
+        },
+        "exact_candidate_entity_ids": {
+          "default": [],
+          "items": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Exact Candidate Entity Ids",
+          "type": "array"
+        },
+        "mention_form": {
+          "$ref": "#/$defs/EntityMentionForm"
+        },
+        "mention_id": {
+          "format": "uuid",
+          "title": "Mention Id",
+          "type": "string"
+        },
+        "mention_ordinal": {
+          "minimum": 1,
+          "title": "Mention Ordinal",
+          "type": "integer"
+        },
+        "resolution_reason": {
+          "minLength": 1,
+          "title": "Resolution Reason",
+          "type": "string"
+        },
+        "resolution_status": {
+          "$ref": "#/$defs/EntityResolutionStatus"
+        },
+        "resolved_entity_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resolved Entity Id"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "start_offset": {
+          "minimum": 0,
+          "title": "Start Offset",
+          "type": "integer"
+        },
+        "surface_text": {
+          "minLength": 1,
+          "title": "Surface Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "mention_id",
+        "mention_ordinal",
+        "start_offset",
+        "end_offset",
+        "surface_text",
+        "mention_form",
+        "resolution_status",
+        "resolution_reason"
+      ],
+      "title": "EntityMention",
+      "type": "object"
+    },
+    "EntityMentionForm": {
+      "enum": [
+        "name",
+        "alias",
+        "pronoun",
+        "description"
+      ],
+      "title": "EntityMentionForm",
+      "type": "string"
+    },
+    "EntityPresenceKind": {
+      "enum": [
+        "present",
+        "mentioned",
+        "recalled",
+        "offstage"
+      ],
+      "title": "EntityPresenceKind",
+      "type": "string"
+    },
+    "EntityProminence": {
+      "enum": [
+        "focus",
+        "supporting",
+        "cameo",
+        "background"
+      ],
+      "title": "EntityProminence",
+      "type": "string"
+    },
+    "EntityResolutionStatus": {
+      "enum": [
+        "resolved_existing",
+        "resolved_new",
+        "anonymous",
+        "ignored",
+        "ambiguous"
+      ],
+      "title": "EntityResolutionStatus",
+      "type": "string"
+    },
+    "SceneEntityOccurrence": {
+      "additionalProperties": false,
+      "description": "One resolved Entity's navigational presence in an approved Scene.",
+      "properties": {
+        "entity_id": {
+          "format": "uuid",
+          "title": "Entity Id",
+          "type": "string"
+        },
+        "mention_ids": {
+          "default": [],
+          "items": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "maxItems": 256,
+          "title": "Mention Ids",
+          "type": "array"
+        },
+        "occurrence_id": {
+          "format": "uuid",
+          "title": "Occurrence Id",
+          "type": "string"
+        },
+        "presence_kind": {
+          "$ref": "#/$defs/EntityPresenceKind"
+        },
+        "prominence": {
+          "$ref": "#/$defs/EntityProminence"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "occurrence_id",
+        "entity_id",
+        "presence_kind",
+        "prominence"
+      ],
+      "title": "SceneEntityOccurrence",
+      "type": "object"
+    }
+  },
+  "$id": "https://novel.local/schemas/scene-trace.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Non-Canon Entity mention and occurrence index for one Scene revision.",
+  "properties": {
+    "chapter_id": {
+      "format": "uuid",
+      "title": "Chapter Id",
+      "type": "string"
+    },
+    "entity_occurrences": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/SceneEntityOccurrence"
+      },
+      "maxItems": 256,
+      "title": "Entity Occurrences",
+      "type": "array"
+    },
+    "mentions": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/EntityMention"
+      },
+      "maxItems": 512,
+      "title": "Mentions",
+      "type": "array"
+    },
+    "scan_notes": {
+      "default": [],
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxItems": 32,
+      "title": "Scan Notes",
+      "type": "array"
+    },
+    "scene_id": {
+      "format": "uuid",
+      "title": "Scene Id",
+      "type": "string"
+    },
+    "scene_trace_id": {
+      "format": "uuid",
+      "title": "Scene Trace Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_document_id": {
+      "format": "uuid",
+      "title": "Source Document Id",
+      "type": "string"
+    },
+    "source_revision": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Source Revision",
+      "type": "string"
+    }
+  },
+  "required": [
+    "scene_trace_id",
+    "scene_id",
+    "chapter_id",
+    "source_document_id",
+    "source_revision"
+  ],
+  "title": "SceneTrace",
+  "type": "object",
+  "x-schema-version": "1.0.0"
+}

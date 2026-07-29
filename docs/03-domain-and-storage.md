@@ -46,7 +46,8 @@ my-novel/
 ├── manuscript/
 ├── memory/
 │   ├── chapters/
-│   └── scenes/
+│   ├── scenes/
+│   └── traces/
 ├── canon/
 │   └── ledger/
 │       └── canon.jsonl
@@ -54,7 +55,8 @@ my-novel/
 │   ├── bootstrap/
 │   ├── intent/
 │   ├── writing/
-│   └── publish/
+│   ├── publish/
+│   └── trace-backfill/
 └── .novel/
     ├── project.sqlite
     ├── locks/
@@ -77,6 +79,9 @@ my-novel/
 - 一个正式 Scene 对应一个 UTF-8 Markdown Document。
 - 一个正式 Markdown Document 不同时承载多个 Scene。
 - Chapter 通过有序 Scene ID 组合内容。
+- 新 Chapter 的第一个 Scene Document 第一行保存由 Session 锁定的准确 Markdown
+  `required_chapter_heading`；Chapter 结构仍保存 number 和 title，发布链路验证两者一致。
+- 同一 Chapter 的后续 Scene Document 不重复章标题。
 - 导出连续章节属于派生操作，不改变 Scene 的正式存储边界。
 
 新 Scene 在 Writing Session 中预分配 ID。发布前它是运行目标，不是批准正文；发布事务
@@ -113,7 +118,21 @@ Story Time 可以是 ordinal、文本表达或事件锚点，不强制转换成�
 
 缺少结构化记录不代表正文中没有发生。
 
-### 7.1 Proposition 与 Assertion
+### 7.1 Entity 身份解析
+
+名称、Alias、称谓、代词和描述性短语不是长期关联键。Draft 中的 Entity Mention 先保存
+文本 span 和候选，再由 AI 明确解析为：
+
+- `resolved_existing`：绑定目标 Narrative Order 之前可见的既有 Entity ID；
+- `resolved_new`：由 Application 在同一 Publish Plan 中分配新 Entity ID；
+- `anonymous`：无需长期身份的匿名场景人物或群体；
+- `ignored`：不是本次线路索引需要记录的叙事实体；
+- `ambiguous`：尚不能安全决定，不能进入 Publish Plan。
+
+Application 可以机械扫描已知 display name 和 Alias，但精确命中只产生候选。模糊匹配、
+唯一命中、出现频率或固定评分不能自动建立身份。
+
+### 7.2 Proposition 与 Assertion
 
 Proposition 只描述命题，不携带真假。真假、怀疑、声明和错误信念由 Assertion 表达。
 
@@ -126,7 +145,7 @@ Assertion scope 必须区分：
 
 人物相信错误命题不能被当作世界事实冲突。
 
-### 7.2 追加式修正
+### 7.3 追加式修正
 
 批准的 Ledger 是追加式历史。Assertion 修正使用：
 
@@ -184,9 +203,42 @@ revision。
 
 ### 9.6 Publication
 
-保存正文、摘要、可选 Intent/Canon Diff、approval digest、事务状态和恢复信息。
+保存正文、摘要、Scene Trace、可选新 Entity、可选 Intent/Canon Diff、approval digest、
+事务状态和恢复信息。
 
-## 10. SQLite 投影
+### 9.7 Scene Trace Backfill
+
+保存目标批准 Scene、准确正文 revision、base Canon revision、旧 Trace digest、候选
+Scene Trace、可选新 Entity、Diff、approval digest、批准和恢复状态。它不保存或替代
+manuscript bytes。
+
+## 10. Scene Trace
+
+每个新发布 Scene revision 对应一个 Scene Trace。它包含：
+
+- Scene、Chapter、Document 和准确 source revision；
+- Mention 的文本 span、surface text、形式、机械精确候选和 AI 实际考虑的候选；
+- 最终 resolution status、稳定 Entity ID 和简短解析理由；
+- 每个已解析 Entity 在该 Scene 的 presence kind、prominence 和关联 Mention；
+- 扫描备注。
+
+Scene Trace 是 Navigation Memory，不是 Canon。正文 revision 变化后立即 stale。Chapter
+出现记录由 `Entity → Scene Trace → Scene → Chapter` 查询推导，不在 Entity 中重复保存。
+匿名和忽略 Mention 不创建 Entity；已解析 Mention 必须准确归入一个 Scene occurrence。
+
+既有 Scene 的 Trace 缺失或错误时使用 Scene Trace Backfill。每个计划同时绑定：
+
+- Project、Chapter、Scene 和 Document ID；
+- 当前批准正文 revision；
+- 准备时的 Canon revision；
+- 准备时旧 Trace 的 digest，缺失时为 `null`；
+- 新 Trace、可选新 Entity、Diff 和 approval digest。
+
+应用时先在锁内重验这些绑定。新 Entity 先追加到 Ledger，再安装引用它的 Trace；SQLite
+最后重建。回填完成文件进入 `runs/trace-backfill/<backfill-id>/`。回填按 Narrative Order
+执行是 Plugin 的工作规则，Application 不用名称或处理顺序猜测实体身份。
+
+## 11. SQLite 投影
 
 SQLite 保存正式文件的查询投影和必要的运行索引：
 
@@ -195,13 +247,17 @@ SQLite 保存正式文件的查询投影和必要的运行索引：
 - Entity、Assertion、Event 和 SourceRef 查询表；
 - Chapter/Scene 关系；
 - Navigation Summary；
+- Scene Trace 和 Entity/Scene occurrence；
 - Summary FTS；
 - Session、Draft、Review 和 Publication 的最小索引。
+
+Trace Backfill 的完整计划保存在运行文件中；当前查询只需要其最终 Scene Trace 和可选
+Entity 投影，不为 Backfill Run 建立额外业务表。
 
 运行产物的完整内容保存在可审查文件中。SQLite 删除后，正式正文、意图、Ledger、摘要和
 运行记录仍然存在，并可以恢复必要投影。
 
-## 11. 版本和并发
+## 12. 版本和并发
 
 - 正式变更携带 base revision。
 - Draft、Review、Summary 和 Publication 绑定准确来源 revision。

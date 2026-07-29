@@ -4,6 +4,7 @@
       "enum": [
         "chapter_summary",
         "scene_summary",
+        "scene_trace",
         "exact_scene",
         "canon_query"
       ],

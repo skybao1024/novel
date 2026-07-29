@@ -20,12 +20,12 @@ def test_initial_migration_is_repeatable(tmp_path: Path) -> None:
     applied = runner.apply(backup=False)
     repeated = runner.apply(backup=False)
 
-    assert [migration.version for migration in applied] == [1, 2]
+    assert [migration.version for migration in applied] == [1, 2, 3]
     assert repeated == ()
     connection = sqlite3.connect(database)
     try:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 2
-        assert connection.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0] == 2
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 3
+        assert connection.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0] == 3
         tables = {
             row[0]
             for row in connection.execute(
@@ -37,6 +37,8 @@ def test_initial_migration_is_repeatable(tmp_path: Path) -> None:
             "chapter_scenes",
             "navigation_summaries",
             "navigation_summaries_fts",
+            "scene_traces",
+            "scene_entity_occurrences",
             "writing_sessions",
             "draft_revisions",
             "reviews",
@@ -74,7 +76,7 @@ def test_failed_migration_rolls_back_and_upgrade_creates_backup(tmp_path: Path) 
     runner = MigrationRunner(database, migrations_directory=migrations)
     runner.apply(backup=False)
 
-    bad = migrations / "0003_bad.sql"
+    bad = migrations / "0004_bad.sql"
     bad.write_text(
         "CREATE TABLE should_rollback(value TEXT) STRICT;\nINVALID SQL;\n",
         encoding="utf-8",
@@ -84,7 +86,7 @@ def test_failed_migration_rolls_back_and_upgrade_creates_backup(tmp_path: Path) 
 
     connection = sqlite3.connect(database)
     try:
-        assert connection.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0] == 2
+        assert connection.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0] == 3
         assert (
             connection.execute(
                 "SELECT 1 FROM sqlite_master WHERE name = 'should_rollback'"
@@ -93,4 +95,4 @@ def test_failed_migration_rolls_back_and_upgrade_creates_backup(tmp_path: Path) 
         )
     finally:
         connection.close()
-    assert list(tmp_path.glob("project.sqlite.backup-v2*"))
+    assert list(tmp_path.glob("project.sqlite.backup-v3*"))

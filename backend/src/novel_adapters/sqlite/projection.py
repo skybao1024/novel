@@ -29,6 +29,7 @@ from novel_application.errors import (
 )
 from novel_application.models import (
     AssertionHistoryItem,
+    EntityOccurrenceItem,
     EventOrder,
     ProjectionStatus,
     SummaryRetrievalMethod,
@@ -48,13 +49,16 @@ from novel_core import (
     ProjectManifest,
     Proposition,
     Scene,
+    SceneEntityOccurrence,
     SceneSummary,
+    SceneTrace,
     SourceRef,
     StoryTime,
     StoryTimeKind,
     chapter_summary_is_stale,
     next_canon_revision,
     scene_summary_is_stale,
+    scene_trace_is_stale,
     validate_chapter_bindings,
 )
 from novel_core.canon.ledger import record_key
@@ -322,6 +326,57 @@ class SQLiteProjectionQueries:
             return None
         payload, stale = projected
         return SceneSummary.from_json(payload), stale
+
+    def get_scene_trace(
+        self,
+        scene_id: UUID,
+    ) -> tuple[SceneTrace, bool] | None:
+        with self._connection() as connection:
+            row = connection.execute(
+                """
+                SELECT payload_json, is_stale
+                FROM scene_traces
+                WHERE scene_id = ?
+                """,
+                (str(scene_id),),
+            ).fetchone()
+        if row is None:
+            return None
+        return SceneTrace.from_json(row["payload_json"]), bool(row["is_stale"])
+
+    def entity_occurrences(
+        self,
+        entity_id: UUID,
+        *,
+        before_narrative_order: int,
+    ) -> tuple[EntityOccurrenceItem, ...]:
+        with self._connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT c.payload_json AS chapter_json,
+                       s.payload_json AS scene_json,
+                       t.payload_json AS trace_json,
+                       o.payload_json AS occurrence_json,
+                       t.is_stale
+                FROM scene_entity_occurrences AS o
+                JOIN scene_traces AS t ON t.scene_id = o.scene_id
+                JOIN scenes AS s ON s.scene_id = o.scene_id
+                JOIN chapters AS c ON c.chapter_id = t.chapter_id
+                WHERE o.entity_id = ? AND s.narrative_order < ?
+                ORDER BY s.narrative_order, o.occurrence_order
+                """,
+                (str(entity_id), before_narrative_order),
+            ).fetchall()
+        return tuple(
+            EntityOccurrenceItem(
+                chapter=Chapter.from_json(row["chapter_json"]),
+                scene=Scene.from_json(row["scene_json"]),
+                scene_trace=SceneTrace.from_json(row["trace_json"]),
+                occurrence=SceneEntityOccurrence.from_json(row["occurrence_json"]),
+                stale=bool(row["is_stale"]),
+            )
+            for row in rows
+        )
 
     def search_summaries(
         self,
@@ -1107,6 +1162,69 @@ def _write_navigation_memory(
                 [
                     (str(chapter.chapter_id), str(scene_id), scene_number)
                     for scene_number, scene_id in enumerate(chapter.scene_ids, start=1)
+                ],
+            )
+
+        for trace in navigation.scene_traces:
+            chapter = chapters.get(trace.chapter_id)
+            scene = scenes.get(trace.scene_id)
+            document = documents.get(trace.source_document_id)
+            if chapter is None:
+                raise ValueError(f"Scene Trace references an unknown Chapter: {trace.chapter_id}")
+            if scene is None:
+                raise ValueError(f"Scene Trace references an unknown Scene: {trace.scene_id}")
+            if document is None:
+                raise ValueError(
+                    f"Scene Trace references an unknown Document: {trace.source_document_id}"
+                )
+            _validate_navigation_entities(
+                tuple(item.entity_id for item in trace.entity_occurrences),
+                entity_ids,
+            )
+            stale = scene_trace_is_stale(
+                trace,
+                chapter=chapter,
+                scene=scene,
+                document=document,
+            )
+            connection.execute(
+                """
+                INSERT INTO scene_traces(
+                    scene_id, scene_trace_id, chapter_id, source_document_id,
+                    source_revision, is_stale, schema_version, payload_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    str(trace.scene_id),
+                    str(trace.scene_trace_id),
+                    str(trace.chapter_id),
+                    str(trace.source_document_id),
+                    trace.source_revision,
+                    int(stale),
+                    trace.schema_version,
+                    trace.to_canonical_json(),
+                ),
+            )
+            connection.executemany(
+                """
+                INSERT INTO scene_entity_occurrences(
+                    scene_id, entity_id, occurrence_order, presence_kind,
+                    prominence, payload_json
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        str(trace.scene_id),
+                        str(occurrence.entity_id),
+                        occurrence_order,
+                        occurrence.presence_kind.value,
+                        occurrence.prominence.value,
+                        occurrence.to_canonical_json(),
+                    )
+                    for occurrence_order, occurrence in enumerate(
+                        trace.entity_occurrences,
+                        start=1,
+                    )
                 ],
             )
 

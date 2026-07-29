@@ -100,7 +100,7 @@ class ProjectNotBootstrappedError(NovelApplicationError):
 
 
 class WorkflowNotFoundError(NovelApplicationError):
-    """A requested run, Session, Draft, Review, or Publication does not exist."""
+    """A requested run, Session, Draft, Review, Publication, or Backfill does not exist."""
 
 
 class WorkflowStateError(NovelApplicationError):
@@ -117,3 +117,7 @@ class RevisionConflictError(NovelApplicationError):
 
 class PublicationRecoveryRequiredError(NovelApplicationError):
     """Approved publication made progress but did not reach a consistent projection."""
+
+
+class TraceBackfillRecoveryRequiredError(NovelApplicationError):
+    """Approved Trace Backfill made progress but did not reach a consistent projection."""

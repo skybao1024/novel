@@ -1,4 +1,7 @@
 interface:
   display_name: "Novel Publish"
-  short_description: "Surface, approve, publish, and recover scenes"
-  default_prompt: "Use $novel-publish to prepare and inspect an exact scene publication, then ask for its digest approval now."
+  short_description: "Approve resolved scene traces and publish safely"
+  default_prompt: "Use $novel-publish to prepare and inspect an exact Scene publication with its resolved Scene Trace, then ask for digest approval."
+
+policy:
+  allow_implicit_invocation: true

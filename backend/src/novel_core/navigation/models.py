@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from enum import StrEnum
 from hashlib import sha256
 from typing import Annotated
 from uuid import UUID
@@ -18,6 +19,155 @@ Sha256Digest = Annotated[
 ]
 IdTuple = Annotated[tuple[UUID, ...], Field(max_length=32)]
 TextTuple = Annotated[tuple[NonEmptyText, ...], Field(max_length=32)]
+
+
+class EntityMentionForm(StrEnum):
+    NAME = "name"
+    ALIAS = "alias"
+    PRONOUN = "pronoun"
+    DESCRIPTION = "description"
+
+
+class EntityResolutionStatus(StrEnum):
+    RESOLVED_EXISTING = "resolved_existing"
+    RESOLVED_NEW = "resolved_new"
+    ANONYMOUS = "anonymous"
+    IGNORED = "ignored"
+    AMBIGUOUS = "ambiguous"
+
+
+class EntityPresenceKind(StrEnum):
+    PRESENT = "present"
+    MENTIONED = "mentioned"
+    RECALLED = "recalled"
+    OFFSTAGE = "offstage"
+
+
+class EntityProminence(StrEnum):
+    FOCUS = "focus"
+    SUPPORTING = "supporting"
+    CAMEO = "cameo"
+    BACKGROUND = "background"
+
+
+class EntityMention(VersionedDomainModel):
+    """One revision-bound prose span and its explicit Entity resolution."""
+
+    mention_id: UUID
+    mention_ordinal: int = Field(ge=1)
+    start_offset: int = Field(ge=0)
+    end_offset: int = Field(ge=1)
+    surface_text: NonEmptyText
+    mention_form: EntityMentionForm
+    exact_candidate_entity_ids: Annotated[tuple[UUID, ...], Field(max_length=32)] = ()
+    considered_entity_ids: Annotated[tuple[UUID, ...], Field(max_length=32)] = ()
+    resolution_status: EntityResolutionStatus
+    resolved_entity_id: UUID | None = None
+    resolution_reason: NonEmptyText
+
+    @model_validator(mode="after")
+    def validate_resolution(self) -> EntityMention:
+        if self.end_offset <= self.start_offset:
+            raise ValueError("Entity Mention end_offset must be after start_offset")
+        for label, ids in (
+            ("exact candidate", self.exact_candidate_entity_ids),
+            ("considered", self.considered_entity_ids),
+        ):
+            if len(ids) != len(set(ids)):
+                raise ValueError(f"Entity Mention {label} IDs must be unique")
+        if not set(self.exact_candidate_entity_ids).issubset(self.considered_entity_ids):
+            raise ValueError("exact Entity candidates must be included in considered candidates")
+        resolved = self.resolution_status in {
+            EntityResolutionStatus.RESOLVED_EXISTING,
+            EntityResolutionStatus.RESOLVED_NEW,
+        }
+        if resolved != (self.resolved_entity_id is not None):
+            raise ValueError("resolved Entity Mention status must match resolved_entity_id")
+        if (
+            self.resolution_status is EntityResolutionStatus.RESOLVED_EXISTING
+            and self.resolved_entity_id not in self.considered_entity_ids
+        ):
+            raise ValueError("existing Entity resolution must be one of the considered candidates")
+        return self
+
+
+class SceneEntityOccurrence(VersionedDomainModel):
+    """One resolved Entity's navigational presence in an approved Scene."""
+
+    occurrence_id: UUID
+    entity_id: UUID
+    presence_kind: EntityPresenceKind
+    prominence: EntityProminence
+    mention_ids: Annotated[tuple[UUID, ...], Field(max_length=256)] = ()
+
+    @field_validator("mention_ids")
+    @classmethod
+    def validate_unique_mentions(cls, value: tuple[UUID, ...]) -> tuple[UUID, ...]:
+        if len(value) != len(set(value)):
+            raise ValueError("Scene Entity occurrence mention IDs must be unique")
+        return value
+
+
+class SceneTrace(VersionedDomainModel):
+    """Non-Canon Entity mention and occurrence index for one Scene revision."""
+
+    scene_trace_id: UUID
+    scene_id: UUID
+    chapter_id: UUID
+    source_document_id: UUID
+    source_revision: Sha256Digest
+    mentions: Annotated[tuple[EntityMention, ...], Field(max_length=512)] = ()
+    entity_occurrences: Annotated[
+        tuple[SceneEntityOccurrence, ...],
+        Field(max_length=256),
+    ] = ()
+    scan_notes: TextTuple = ()
+
+    @model_validator(mode="after")
+    def validate_trace(self) -> SceneTrace:
+        mention_ids = tuple(item.mention_id for item in self.mentions)
+        mention_ordinals = tuple(item.mention_ordinal for item in self.mentions)
+        spans = tuple((item.start_offset, item.end_offset) for item in self.mentions)
+        if len(mention_ids) != len(set(mention_ids)):
+            raise ValueError("Scene Trace mention IDs must be unique")
+        if mention_ordinals != tuple(range(1, len(self.mentions) + 1)):
+            raise ValueError("Scene Trace mention ordinals must be contiguous and ordered")
+        if len(spans) != len(set(spans)):
+            raise ValueError("Scene Trace Mention spans must be unique")
+        if any(
+            mention.resolution_status is EntityResolutionStatus.AMBIGUOUS
+            for mention in self.mentions
+        ):
+            raise ValueError("published Scene Trace cannot contain ambiguous Entity Mentions")
+
+        occurrence_ids = tuple(item.occurrence_id for item in self.entity_occurrences)
+        occurrence_entity_ids = tuple(item.entity_id for item in self.entity_occurrences)
+        if len(occurrence_ids) != len(set(occurrence_ids)):
+            raise ValueError("Scene Trace occurrence IDs must be unique")
+        if len(occurrence_entity_ids) != len(set(occurrence_entity_ids)):
+            raise ValueError("Scene Trace can contain only one occurrence per Entity")
+
+        known_mentions = set(mention_ids)
+        linked_mentions: list[UUID] = []
+        for occurrence in self.entity_occurrences:
+            unknown = set(occurrence.mention_ids) - known_mentions
+            if unknown:
+                raise ValueError("Scene Entity occurrence references unknown Mention IDs")
+            linked_mentions.extend(occurrence.mention_ids)
+            for mention_id in occurrence.mention_ids:
+                mention = next(item for item in self.mentions if item.mention_id == mention_id)
+                if mention.resolved_entity_id != occurrence.entity_id:
+                    raise ValueError("Scene occurrence Entity must match its resolved Mentions")
+        if len(linked_mentions) != len(set(linked_mentions)):
+            raise ValueError("resolved Entity Mention can belong to only one Scene occurrence")
+        resolved_mentions = {
+            mention.mention_id
+            for mention in self.mentions
+            if mention.resolved_entity_id is not None
+        }
+        if set(linked_mentions) != resolved_mentions:
+            raise ValueError("every resolved Entity Mention must belong to one Scene occurrence")
+        return self
 
 
 class Chapter(VersionedDomainModel):
@@ -107,6 +257,12 @@ def scene_summary_digest(summary: SceneSummary) -> str:
     return f"sha256:{sha256(summary.to_canonical_json().encode('utf-8')).hexdigest()}"
 
 
+def scene_trace_digest(trace: SceneTrace) -> str:
+    """Return the stable digest used as a Trace Backfill base."""
+
+    return f"sha256:{sha256(trace.to_canonical_json().encode('utf-8')).hexdigest()}"
+
+
 def validate_chapter_bindings(
     chapters: tuple[Chapter, ...],
     scenes: tuple[Scene, ...],
@@ -166,6 +322,30 @@ def scene_summary_is_stale(
     if document.document_kind is not DocumentKind.MANUSCRIPT:
         raise ValueError("Scene Summary can only describe a manuscript Document")
     return summary.source_revision != document.revision or scene.revision != document.revision
+
+
+def scene_trace_is_stale(
+    trace: SceneTrace,
+    *,
+    chapter: Chapter,
+    scene: Scene,
+    document: Document,
+) -> bool:
+    """Return whether a structurally valid Scene Trace no longer matches its Scene."""
+
+    if trace.chapter_id != chapter.chapter_id or trace.scene_id != scene.scene_id:
+        raise ValueError("Scene Trace does not match its Chapter and Scene")
+    if scene.scene_id not in chapter.scene_ids:
+        raise ValueError("Scene Trace Scene is not part of its Chapter")
+    if trace.source_document_id != document.document_id:
+        raise ValueError("Scene Trace source Document does not match the Scene")
+    if scene.source_document_id != document.document_id:
+        raise ValueError("Scene source Document does not match the Scene Trace")
+    if scene.status is not SceneStatus.APPROVED:
+        raise ValueError("Scene Trace can only describe an approved Scene")
+    if document.document_kind is not DocumentKind.MANUSCRIPT:
+        raise ValueError("Scene Trace can only describe a manuscript Document")
+    return trace.source_revision != document.revision or scene.revision != document.revision
 
 
 def chapter_summary_is_stale(

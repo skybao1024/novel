@@ -18,6 +18,7 @@ from novel_application.ports.protocols import (
     ProjectWorkspace,
     ProjectWriteLock,
     PublicationStore,
+    SceneTraceBackfillStore,
     WritingRunStore,
 )
 
@@ -37,6 +38,7 @@ __all__ = [
     "ProjectWorkspace",
     "ProjectWriteLock",
     "PublicationStore",
+    "SceneTraceBackfillStore",
     "ProjectionQueryPort",
     "ProjectionStore",
     "WritingRunStore",
