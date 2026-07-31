@@ -45,7 +45,7 @@ class Event(VersionedDomainModel):
     narrative_order: int = Field(ge=1)
     participant_entity_ids: NonEmptyIdTuple
     location_entity_ids: IdTuple = ()
-    source_scene_id: UUID
+    source_chapter_id: UUID
     source_ref_ids: NonEmptyIdTuple
     summary: NonEmptyText
     canon_status: EventCanonStatus = EventCanonStatus.APPROVED

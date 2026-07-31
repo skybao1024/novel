@@ -1,6 +1,6 @@
 {
   "$defs": {
-    "ContinuitySceneStatus": {
+    "ContinuityChapterStatus": {
       "additionalProperties": false,
       "properties": {
         "chapter_id": {
@@ -36,27 +36,27 @@
           "title": "Satisfied",
           "type": "boolean"
         },
-        "scene_id": {
-          "format": "uuid",
-          "title": "Scene Id",
-          "type": "string"
-        },
         "schema_version": {
           "const": "1.0.0",
           "default": "1.0.0",
           "title": "Schema Version",
           "type": "string"
+        },
+        "volume_id": {
+          "format": "uuid",
+          "title": "Volume Id",
+          "type": "string"
         }
       },
       "required": [
+        "volume_id",
         "chapter_id",
-        "scene_id",
         "document_id",
         "document_revision",
         "narrative_order",
         "satisfied"
       ],
-      "title": "ContinuitySceneStatus",
+      "title": "ContinuityChapterStatus",
       "type": "object"
     }
   },
@@ -64,7 +64,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
-    "continuity_chapter_id": {
+    "continuity_volume_id": {
       "anyOf": [
         {
           "format": "uuid",
@@ -75,24 +75,51 @@
         }
       ],
       "default": null,
-      "title": "Continuity Chapter Id"
+      "title": "Continuity Volume Id"
     },
-    "missing_scene_ids": {
+    "missing_chapter_ids": {
       "default": [],
       "items": {
         "format": "uuid",
         "type": "string"
       },
-      "title": "Missing Scene Ids",
+      "title": "Missing Chapter Ids",
       "type": "array"
     },
-    "required_scenes": {
+    "required_chapters": {
       "default": [],
       "items": {
-        "$ref": "#/$defs/ContinuitySceneStatus"
+        "$ref": "#/$defs/ContinuityChapterStatus"
       },
-      "title": "Required Scenes",
+      "title": "Required Chapters",
       "type": "array"
+    },
+    "revision_source_chapter_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Revision Source Chapter Id"
+    },
+    "revision_source_retrieved_source_ids": {
+      "default": [],
+      "items": {
+        "format": "uuid",
+        "type": "string"
+      },
+      "title": "Revision Source Retrieved Source Ids",
+      "type": "array"
+    },
+    "revision_source_satisfied": {
+      "default": true,
+      "title": "Revision Source Satisfied",
+      "type": "boolean"
     },
     "satisfied": {
       "title": "Satisfied",

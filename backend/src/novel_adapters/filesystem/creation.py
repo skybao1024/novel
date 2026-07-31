@@ -19,13 +19,13 @@ from novel_application.errors import (
 )
 from novel_core import (
     BootstrapRun,
+    ChapterTraceBackfill,
     DraftRevision,
     IntentContent,
     IntentRevision,
     Publication,
     RetrievedSource,
     Review,
-    SceneTraceBackfill,
     WritingSession,
 )
 from novel_core._base import VersionedDomainModel
@@ -51,7 +51,7 @@ class RunSourceSnapshot:
         reviews: tuple[Review, ...],
         retrieved_sources: tuple[RetrievedSource, ...],
         publications: tuple[Publication, ...],
-        trace_backfills: tuple[SceneTraceBackfill, ...],
+        trace_backfills: tuple[ChapterTraceBackfill, ...],
         revision: str,
     ) -> None:
         self.bootstrap_runs = bootstrap_runs
@@ -117,8 +117,8 @@ class FilesystemRunIndexStore:
         trace_backfills = self._load_pattern(
             self.layout.trace_backfill_runs,
             "*/backfill.json",
-            SceneTraceBackfill,
-            "Scene Trace Backfill",
+            ChapterTraceBackfill,
+            "Chapter Trace Backfill",
         )
         hasher = hashlib.sha256()
         runs_root = self.layout.root / "runs"
@@ -147,6 +147,7 @@ class FilesystemRunIndexStore:
     def health_issues(self) -> tuple[str, ...]:
         snapshot = self.load_snapshot()
         active_transaction_states = {
+            "applying",
             "manuscript_installed",
             "navigation_installed",
             "intent_installed",
@@ -388,21 +389,21 @@ class FilesystemPublicationStore:
         return self.layout.publication_runs / str(publication_id) / "publication.json"
 
 
-class FilesystemSceneTraceBackfillStore:
+class FilesystemChapterTraceBackfillStore:
     def __init__(self, root: Path) -> None:
         self.layout = ProjectLayout(root.resolve())
 
-    def create(self, backfill: SceneTraceBackfill) -> None:
+    def create(self, backfill: ChapterTraceBackfill) -> None:
         _create_model(self._path(backfill.plan.backfill_id), backfill)
 
-    def load(self, backfill_id: UUID) -> SceneTraceBackfill:
+    def load(self, backfill_id: UUID) -> ChapterTraceBackfill:
         return _load_model(
             self._path(backfill_id),
-            SceneTraceBackfill,
-            "Scene Trace Backfill",
+            ChapterTraceBackfill,
+            "Chapter Trace Backfill",
         )
 
-    def replace(self, backfill: SceneTraceBackfill) -> None:
+    def replace(self, backfill: ChapterTraceBackfill) -> None:
         _replace_model(self._path(backfill.plan.backfill_id), backfill)
 
     def _path(self, backfill_id: UUID) -> Path:

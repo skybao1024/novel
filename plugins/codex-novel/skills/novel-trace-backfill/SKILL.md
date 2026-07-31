@@ -1,6 +1,6 @@
 ---
 name: novel-trace-backfill
-description: Prepare, inspect, explicitly approve, apply, and recover revision-bound Entity Scene Trace backfills for approved historical Novel Scenes. Use when an author asks to add a missing historical Trace, repair a stale or incorrect Trace, or build old Entity occurrence lines without republishing or changing manuscript prose.
+description: Prepare, inspect, explicitly approve, apply, and recover revision-bound Entity Chapter Trace backfills for approved historical Novel Chapters. Use when an author asks to add a missing historical Trace, repair a stale or incorrect Trace, or build old Entity occurrence lines without republishing or changing manuscript prose.
 ---
 
 # Novel Trace Backfill
@@ -16,22 +16,22 @@ only to operations bound to that project's Manifest and Project ID. Do not ask t
 switch workspaces or start a new thread only to activate the project contract.
 
 Use `<root>` as the working directory for every project-bound command. Put the Codex-authored
-Scene Trace Draft only under
-`<root>/candidates/trace-backfill/<scene-id>/`. This is non-authoritative staging. Do not place it
+Chapter Trace Draft only under
+`<root>/candidates/trace-backfill/<chapter-id>/`. This is non-authoritative staging. Do not place it
 in the parent workspace, project top level, `memory/`, `canon/`, `runs/`, or `.novel/`.
 
 ## Select the source
 
 1. Run `novel version --json`, `novel protocol-version --json`, and
    `novel --project <root> doctor --json`. Stop on an unhealthy project or incompatible protocol.
-2. Use `memory chapters` and `memory scenes --chapter-id <id>` to discover stable IDs. Process
-   missing historical Traces one Scene at a time in Narrative Order unless the author selected a
+2. Use `memory volumes` and `memory chapters --volume-id <id>` to discover stable IDs. Process
+   missing historical Traces one Chapter at a time in Narrative Order unless the author selected a
    specific correction.
 3. Read the exact target:
 
    ```text
    novel --project <root> trace-backfill source \
-     --chapter-id <id> --scene-id <id> --json
+     --volume-id <id> --chapter-id <id> --json
    ```
 
    Use only the returned approved UTF-8 `text`, `source_revision`, current Trace, current Entity
@@ -44,7 +44,7 @@ in the parent workspace, project top level, `memory/`, `canon/`, `runs/`, or `.n
      --entity-id <id> --json
    ```
 
-   Read relevant exact Scenes with `trace-backfill source`. Occurrences and summaries locate
+   Read relevant exact Chapters with `trace-backfill source`. Occurrences and summaries locate
    evidence; they do not decide identity.
 
 ## Resolve the Trace
@@ -58,7 +58,7 @@ Resolve each Mention as `resolved_existing`, `resolved_new`, `anonymous`, `ignor
 automatically. Keep an Entity anonymous when the prose does not establish a reusable identity.
 Do not prepare while any Mention is `ambiguous`.
 
-Create the versioned Scene Trace Draft in the project-local candidate directory. If the source
+Create the versioned Chapter Trace Draft in the project-local candidate directory. If the source
 revision changes, discard it and repeat source reading and resolution.
 
 ## Prepare and inspect
@@ -67,13 +67,13 @@ Call:
 
 ```text
 novel --project <root> trace-backfill prepare \
-  --chapter-id <id> --scene-id <id> \
-  --source-revision <revision> --scene-trace <json-file> --json
+  --volume-id <id> --chapter-id <id> \
+  --source-revision <revision> --chapter-trace <json-file> --json
 ```
 
 Then call `trace-backfill inspect --backfill-id <id> --json`. Present:
 
-- exact Chapter, Scene, Document, and source revision;
+- exact Volume, Chapter, Document, and source revision;
 - old and candidate Trace Diff;
 - every Mention resolution and occurrence;
 - optional new Entity IDs and Canon Diff;
@@ -90,7 +90,7 @@ Only after exact approval, call `trace-backfill approve` with the shown ID and D
 If apply returns `trace_backfill_recovery_required`, do not prepare a replacement. Call
 `trace-backfill recover --backfill-id <id>` for the same immutable plan.
 
-Never directly edit manuscript, Chapter/Scene structure, Summary, Scene Trace, Intent, Ledger,
+Never directly edit manuscript, Volume/Chapter structure, Summary, Chapter Trace, Intent, Ledger,
 run state, or SQLite. Backfill must not be used from an ordinary Writing Session to bypass its
 Narrative Order history boundary. Keep final Mention extraction and identity resolution in the
 primary agent; a partial-context sub-agent report cannot substitute for exact source review.

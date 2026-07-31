@@ -20,7 +20,7 @@ from novel_core.canon.propositions import Proposition
 from novel_core.canon.sources import SourceRef
 from novel_core.events import Event, EventEdge
 from novel_core.identity import Entity, EntityAlias
-from novel_core.projects import Document, Scene
+from novel_core.projects import Chapter, ChapterStatus, Document
 
 Revision = Annotated[str, StringConstraints(pattern=r"^sha256:[0-9a-f]{64}$")]
 EMPTY_CANON_REVISION: Revision = f"sha256:{hashlib.sha256(b'').hexdigest()}"
@@ -42,9 +42,9 @@ class DocumentLedgerRecord(VersionedDomainModel):
     value: Document
 
 
-class SceneLedgerRecord(VersionedDomainModel):
-    record_type: Literal["scene"] = "scene"
-    value: Scene
+class ChapterLedgerRecord(VersionedDomainModel):
+    record_type: Literal["chapter"] = "chapter"
+    value: Chapter
 
 
 class SourceRefLedgerRecord(VersionedDomainModel):
@@ -71,7 +71,7 @@ LedgerRecord = Annotated[
     EntityLedgerRecord
     | EntityAliasLedgerRecord
     | DocumentLedgerRecord
-    | SceneLedgerRecord
+    | ChapterLedgerRecord
     | SourceRefLedgerRecord
     | EventLedgerRecord
     | EventEdgeLedgerRecord
@@ -87,7 +87,7 @@ class CanonLedgerEntry(VersionedDomainModel):
     ledger_entry_id: UUID
     base_revision: Revision
     approved_at: AwareDatetime
-    source_scene_id: UUID | None = None
+    source_chapter_id: UUID | None = None
     records: Annotated[tuple[LedgerRecord, ...], Field(min_length=1)]
 
     @model_validator(mode="after")
@@ -107,8 +107,8 @@ class CanonLedgerEntry(VersionedDomainModel):
                 raise ValueError("change set base_revision must match its ledger entry")
             if change_set.approved_at != self.approved_at:
                 raise ValueError("change set approved_at must match its ledger entry")
-            if change_set.source_scene_id != self.source_scene_id:
-                raise ValueError("change set source_scene_id must match its ledger entry")
+            if change_set.source_chapter_id != self.source_chapter_id:
+                raise ValueError("change set source_chapter_id must match its ledger entry")
         return self
 
 
@@ -121,7 +121,7 @@ class CanonLedgerSnapshot:
     entities: tuple[Entity, ...]
     entity_aliases: tuple[EntityAlias, ...]
     documents: tuple[Document, ...]
-    scenes: tuple[Scene, ...]
+    chapters: tuple[Chapter, ...]
     source_refs: tuple[SourceRef, ...]
     propositions: tuple[Proposition, ...]
     assertions: tuple[Assertion, ...]
@@ -147,8 +147,8 @@ def record_key(record: LedgerRecord) -> tuple[str, UUID]:
         return record.record_type, value.alias_id
     if isinstance(record, DocumentLedgerRecord):
         return record.record_type, value.document_id
-    if isinstance(record, SceneLedgerRecord):
-        return record.record_type, value.scene_id
+    if isinstance(record, ChapterLedgerRecord):
+        return record.record_type, value.chapter_id
     if isinstance(record, SourceRefLedgerRecord):
         return record.record_type, value.source_ref_id
     if isinstance(record, EventLedgerRecord):
@@ -200,7 +200,7 @@ class _LedgerReplayState:
         self.entities: dict[UUID, Entity] = {}
         self.entity_aliases: dict[UUID, EntityAlias] = {}
         self.documents: dict[UUID, Document] = {}
-        self.scenes: dict[UUID, Scene] = {}
+        self.chapters: dict[UUID, Chapter] = {}
         self.source_refs: dict[UUID, SourceRef] = {}
         self.propositions: dict[UUID, Proposition] = {}
         self.assertions: dict[UUID, Assertion] = {}
@@ -218,39 +218,104 @@ class _LedgerReplayState:
                 "entity",
                 "document",
                 "entity_alias",
-                "scene",
+                "chapter",
                 "source_ref",
                 "event",
                 "event_edge",
                 "canon_change_set",
             )
         }
+        revised_document_ids = {
+            record.value.document_id
+            for record in records_by_type["document"]
+            if record.value.document_id in self.documents
+        }
+        revised_chapter_ids = {
+            record.value.chapter_id
+            for record in records_by_type["chapter"]
+            if record.value.chapter_id in self.chapters
+        }
 
         for record in records_by_type["entity"]:
             self._add_unique(self.entities, record.value.entity_id, record.value, "entity")
         for record in records_by_type["document"]:
-            self._add_unique(
-                self.documents,
-                record.value.document_id,
-                record.value,
-                "document",
-            )
+            document = record.value
+            existing_document = self.documents.get(document.document_id)
+            if existing_document is None:
+                self.documents[document.document_id] = document
+            else:
+                if (
+                    document.relative_path != existing_document.relative_path
+                    or document.document_kind is not existing_document.document_kind
+                    or document.revision == existing_document.revision
+                ):
+                    raise LedgerReplayError(
+                        "Document revision must preserve identity, path, kind, and change bytes: "
+                        f"{document.document_id}"
+                    )
+                self.documents[document.document_id] = document
         for record in records_by_type["entity_alias"]:
             alias = record.value
             self._require(self.entities, alias.entity_id, "alias entity")
             if alias.used_by_entity_id is not None:
                 self._require(self.entities, alias.used_by_entity_id, "alias used_by entity")
             self._add_unique(self.entity_aliases, alias.alias_id, alias, "entity alias")
-        for record in records_by_type["scene"]:
-            scene = record.value
-            self._require(self.documents, scene.source_document_id, "scene source document")
+        for record in records_by_type["chapter"]:
+            chapter = record.value
+            self._require(self.documents, chapter.source_document_id, "chapter source document")
             for entity_id, label in (
-                (scene.pov_entity_id, "scene POV entity"),
-                (scene.location_entity_id, "scene location entity"),
+                (chapter.pov_entity_id, "chapter POV entity"),
+                (chapter.location_entity_id, "chapter location entity"),
             ):
                 if entity_id is not None:
                     self._require(self.entities, entity_id, label)
-            self._add_unique(self.scenes, scene.scene_id, scene, "scene")
+            existing_chapter = self.chapters.get(chapter.chapter_id)
+            if existing_chapter is None:
+                self.chapters[chapter.chapter_id] = chapter
+            else:
+                if (
+                    chapter.volume_id != existing_chapter.volume_id
+                    or chapter.chapter_number != existing_chapter.chapter_number
+                    or chapter.title != existing_chapter.title
+                    or chapter.narrative_order != existing_chapter.narrative_order
+                    or chapter.story_time != existing_chapter.story_time
+                    or chapter.pov_entity_id != existing_chapter.pov_entity_id
+                    or chapter.location_entity_id != existing_chapter.location_entity_id
+                    or chapter.status is not existing_chapter.status
+                    or chapter.status is not ChapterStatus.APPROVED
+                    or chapter.source_document_id != existing_chapter.source_document_id
+                    or chapter.revision == existing_chapter.revision
+                ):
+                    raise LedgerReplayError(
+                        "Chapter revision may change only approved manuscript bytes: "
+                        f"{chapter.chapter_id}"
+                    )
+                document = self.documents[chapter.source_document_id]
+                if chapter.revision != document.revision:
+                    raise LedgerReplayError(
+                        "revised Chapter must bind its revised Document revision: "
+                        f"{chapter.chapter_id}"
+                    )
+                self.chapters[chapter.chapter_id] = chapter
+        for chapter_id in revised_chapter_ids:
+            chapter = self.chapters[chapter_id]
+            if chapter.source_document_id not in revised_document_ids:
+                raise LedgerReplayError(
+                    "Chapter revision requires its Document revision in the same entry: "
+                    f"{chapter_id}"
+                )
+        for document_id in revised_document_ids:
+            dependent_chapter_ids = {
+                chapter.chapter_id
+                for chapter in self.chapters.values()
+                if chapter.source_document_id == document_id
+            }
+            if not dependent_chapter_ids or not dependent_chapter_ids.issubset(revised_chapter_ids):
+                raise LedgerReplayError(
+                    "Document revision requires every dependent Chapter revision "
+                    "in the same entry: "
+                    f"{document_id}"
+                )
         for record in records_by_type["source_ref"]:
             source_ref = record.value
             self._require(
@@ -258,10 +323,10 @@ class _LedgerReplayState:
                 source_ref.document_id,
                 "SourceRef document",
             )
-            scene = self._require(self.scenes, source_ref.scene_id, "SourceRef scene")
-            if scene.source_document_id != source_ref.document_id:
+            chapter = self._require(self.chapters, source_ref.chapter_id, "SourceRef chapter")
+            if chapter.source_document_id != source_ref.document_id:
                 raise LedgerReplayError(
-                    f"SourceRef {source_ref.source_ref_id} document does not own its scene"
+                    f"SourceRef {source_ref.source_ref_id} document does not own its chapter"
                 )
             quote_hash = hashlib.sha256(source_ref.excerpt.encode("utf-8")).hexdigest()
             if source_ref.quote_hash != quote_hash:
@@ -276,14 +341,14 @@ class _LedgerReplayState:
             )
         for record in records_by_type["event"]:
             event = record.value
-            self._require(self.scenes, event.source_scene_id, "event source scene")
+            self._require(self.chapters, event.source_chapter_id, "event source chapter")
             for entity_id in (*event.participant_entity_ids, *event.location_entity_ids):
                 self._require(self.entities, entity_id, "event entity")
             for source_ref_id in event.source_ref_ids:
                 source_ref = self._require(self.source_refs, source_ref_id, "event SourceRef")
-                if source_ref.scene_id != event.source_scene_id:
+                if source_ref.chapter_id != event.source_chapter_id:
                     raise LedgerReplayError(
-                        f"event {event.event_id} SourceRef belongs to another scene"
+                        f"event {event.event_id} SourceRef belongs to another chapter"
                     )
             self._add_unique(self.events, event.event_id, event, "event")
         for record in records_by_type["event_edge"]:
@@ -296,8 +361,8 @@ class _LedgerReplayState:
         for record in records_by_type["canon_change_set"]:
             self._apply_change_set(record.value)
 
-        if entry.source_scene_id is not None:
-            self._require(self.scenes, entry.source_scene_id, "ledger source scene")
+        if entry.source_chapter_id is not None:
+            self._require(self.chapters, entry.source_chapter_id, "ledger source chapter")
 
     def _apply_change_set(self, change_set: CanonChangeSet) -> None:
         self._add_unique(
@@ -306,8 +371,8 @@ class _LedgerReplayState:
             change_set,
             "change set",
         )
-        if change_set.source_scene_id is not None:
-            self._require(self.scenes, change_set.source_scene_id, "change set source scene")
+        if change_set.source_chapter_id is not None:
+            self._require(self.chapters, change_set.source_chapter_id, "change set source chapter")
 
         for operation in change_set.operations:
             if operation.operation_id in self.operation_ids:
@@ -405,7 +470,7 @@ class _LedgerReplayState:
         story_times = [
             *(alias.valid_from for alias in self.entity_aliases.values()),
             *(alias.valid_to for alias in self.entity_aliases.values()),
-            *(scene.story_time for scene in self.scenes.values()),
+            *(chapter.story_time for chapter in self.chapters.values()),
             *(event.story_time for event in self.events.values()),
             *(assertion.valid_from for assertion in self.assertions.values()),
             *(assertion.valid_to for assertion in self.assertions.values()),
@@ -431,7 +496,7 @@ class _LedgerReplayState:
             entities=tuple(self.entities.values()),
             entity_aliases=tuple(self.entity_aliases.values()),
             documents=tuple(self.documents.values()),
-            scenes=tuple(self.scenes.values()),
+            chapters=tuple(self.chapters.values()),
             source_refs=tuple(self.source_refs.values()),
             propositions=tuple(self.propositions.values()),
             assertions=tuple(self.assertions.values()),

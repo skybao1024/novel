@@ -26,7 +26,7 @@ class StoryTime(VersionedDomainModel):
     """A calendar-neutral position on a story timeline.
 
     Narrative order deliberately does not belong to this value object. It is a
-    property of the scene or event through which readers encounter the event.
+    property of the chapter or event through which readers encounter the event.
     """
 
     timeline_id: TimelineId = "main"

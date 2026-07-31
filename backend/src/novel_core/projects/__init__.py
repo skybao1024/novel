@@ -1,14 +1,14 @@
 """Project-level Narrative Core contracts."""
 
 from novel_core.projects.models import (
+    Chapter,
+    ChapterStatus,
     Document,
     DocumentKind,
     ProjectCatalog,
     ProjectCatalogEntry,
     ProjectManifest,
     ProjectStatus,
-    Scene,
-    SceneStatus,
 )
 from novel_core.projects.text import manuscript_revision
 
@@ -19,7 +19,7 @@ __all__ = [
     "ProjectCatalogEntry",
     "ProjectManifest",
     "ProjectStatus",
-    "Scene",
-    "SceneStatus",
+    "Chapter",
+    "ChapterStatus",
     "manuscript_revision",
 ]

@@ -50,7 +50,7 @@ class CharacterState(VersionedDomainModel):
     """A sparse Canon view, never a claim that prose contains no other state."""
 
     character_id: UUID
-    target_scene_id: UUID
+    target_chapter_id: UUID
     phase: CharacterStatePhase
     story_time: StoryTime
     location: SourcedAssertion | None = None

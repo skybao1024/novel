@@ -2,10 +2,10 @@
   "$defs": {
     "RetrievalKind": {
       "enum": [
+        "volume_summary",
         "chapter_summary",
-        "scene_summary",
-        "scene_trace",
-        "exact_scene",
+        "chapter_trace",
+        "exact_chapter",
         "canon_query"
       ],
       "title": "RetrievalKind",
@@ -73,7 +73,13 @@
       "title": "Retrieved Source Id",
       "type": "string"
     },
-    "scene_id": {
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "volume_id": {
       "anyOf": [
         {
           "format": "uuid",
@@ -84,13 +90,7 @@
         }
       ],
       "default": null,
-      "title": "Scene Id"
-    },
-    "schema_version": {
-      "const": "1.0.0",
-      "default": "1.0.0",
-      "title": "Schema Version",
-      "type": "string"
+      "title": "Volume Id"
     },
     "writing_session_id": {
       "format": "uuid",

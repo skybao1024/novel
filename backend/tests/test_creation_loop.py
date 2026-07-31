@@ -5,18 +5,19 @@ import sqlite3
 from pathlib import Path
 from uuid import UUID
 
+from novel_adapters.filesystem import FilesystemManuscriptStore
 from novel_adapters.sqlite import SQLiteProjectionStore
 from novel_cli.main import EXIT_CONFLICT, EXIT_OK, EXIT_PROJECT, EXIT_STORAGE, main
 from novel_core import (
     BootstrapEntityDraft,
+    ChapterEntityOccurrenceDraft,
+    ChapterTraceDraft,
+    ChapterTraceEntityDraft,
     EntityMentionDraft,
     EntityMentionForm,
     EntityPresenceKind,
     EntityProminence,
     EntityResolutionStatus,
-    SceneEntityOccurrenceDraft,
-    SceneTraceDraft,
-    SceneTraceEntityDraft,
     StoryTime,
     StoryTimeKind,
 )
@@ -85,23 +86,23 @@ def _write_story_time(path: Path, ordinal: int) -> None:
 def _write_summaries(
     directory: Path,
     *,
-    scene_number: int,
+    chapter_number: int,
 ) -> tuple[Path, Path]:
     directory.mkdir(parents=True, exist_ok=True)
-    scene_path = directory / f"scene-{scene_number}.md"
-    chapter_path = directory / f"chapter-{scene_number}.md"
-    scene_path.write_text(
-        f"第 {scene_number} 场推进了主角的选择。\n",
-        encoding="utf-8",
-    )
+    chapter_path = directory / f"chapter-{chapter_number}.md"
+    volume_path = directory / f"volume-{chapter_number}.md"
     chapter_path.write_text(
-        f"本章已有 {scene_number} 个正式场景。\n",
+        f"第 {chapter_number} 章推进了主角的选择。\n",
         encoding="utf-8",
     )
-    return scene_path, chapter_path
+    volume_path.write_text(
+        f"本卷已有 {chapter_number} 个正式章节。\n",
+        encoding="utf-8",
+    )
+    return chapter_path, volume_path
 
 
-def _write_scene_trace(
+def _write_chapter_trace(
     path: Path,
     text: str,
     *,
@@ -124,7 +125,7 @@ def _write_scene_trace(
         )
     ]
     occurrences = [
-        SceneEntityOccurrenceDraft(
+        ChapterEntityOccurrenceDraft(
             resolved_entity_id=protagonist_uuid,
             presence_kind=EntityPresenceKind.PRESENT,
             prominence=EntityProminence.FOCUS,
@@ -143,11 +144,11 @@ def _write_scene_trace(
                 mention_form=EntityMentionForm.NAME,
                 resolution_status=EntityResolutionStatus.RESOLVED_NEW,
                 new_entity_temporary_name="messenger",
-                resolution_reason="历史候选为空，本场明确引入有名人物。",
+                resolution_reason="历史候选为空，本章明确引入有名人物。",
             )
         )
         occurrences.append(
-            SceneEntityOccurrenceDraft(
+            ChapterEntityOccurrenceDraft(
                 new_entity_temporary_name="messenger",
                 presence_kind=EntityPresenceKind.PRESENT,
                 prominence=EntityProminence.SUPPORTING,
@@ -155,13 +156,13 @@ def _write_scene_trace(
             )
         )
         new_entities = (
-            SceneTraceEntityDraft(
+            ChapterTraceEntityDraft(
                 temporary_name="messenger",
                 entity_type="character",
                 display_name="秦渡",
             ),
         )
-    trace = SceneTraceDraft(
+    trace = ChapterTraceDraft(
         new_entities=new_entities,
         mentions=tuple(mentions),
         entity_occurrences=tuple(occurrences),
@@ -171,7 +172,7 @@ def _write_scene_trace(
     return path
 
 
-def test_full_approved_creation_loop_publishes_two_queryable_scenes(
+def test_full_approved_creation_loop_publishes_two_queryable_chapters(
     tmp_path: Path,
     capsys,
     monkeypatch,
@@ -326,9 +327,13 @@ def test_full_approved_creation_loop_publishes_two_queryable_scenes(
         "session",
         "start",
         "--author-goal",
-        "写出林澜打开旧信的场景",
+        "写出林澜打开旧信的章节",
         "--story-time",
         str(story_time),
+        "--new-volume-number",
+        "1",
+        "--new-volume-title",
+        "潮汐旧事",
         "--new-chapter-number",
         "1",
         "--new-chapter-title",
@@ -344,12 +349,14 @@ def test_full_approved_creation_loop_publishes_two_queryable_scenes(
         first_session["writing_session_id"],
     )
     assert context["intent"]["current_outline"].startswith("第一章")
-    assert context["previous_scene_text_available"] is False
-    assert context["continuity_chapter_id"] is None
-    assert context["continuity_scene_ids"] == []
+    assert context["previous_chapter_text_available"] is False
+    assert context["continuity_volume_id"] is None
+    assert context["continuity_chapter_ids"] == []
+    assert context["target_chapter_number"] == 1
+    assert context["target_chapter_title"] == "旧信"
     assert context["required_chapter_heading"] == "# 第一章　旧信"
 
-    first_draft_file = tmp_path / "first-scene.md"
+    first_draft_file = tmp_path / "first-chapter.md"
     first_draft_file.write_text("潮声退去时，林澜拆开了那封信。\n", encoding="utf-8")
     heading_blocked_code, heading_blocked = _invoke_json(
         capsys,
@@ -398,12 +405,12 @@ def test_full_approved_creation_loop_publishes_two_queryable_scenes(
         "视角稳定，可以发布。",
     )
     first_session["draft_revision"] = first_draft["draft_revision"]
-    first_scene_path, first_chapter_path = _write_summaries(
+    first_chapter_path, first_volume_path = _write_summaries(
         tmp_path / "summaries",
-        scene_number=1,
+        chapter_number=1,
     )
-    first_trace_path = _write_scene_trace(
-        tmp_path / "first-scene-trace.json",
+    first_trace_path = _write_chapter_trace(
+        tmp_path / "first-chapter-trace.json",
         first_draft_file.read_text(encoding="utf-8"),
         protagonist_id=protagonist_id,
     )
@@ -420,9 +427,9 @@ def test_full_approved_creation_loop_publishes_two_queryable_scenes(
     )
     assert first_candidates["matches"][0]["surface_text"] == "林澜"
     assert first_candidates["matches"][0]["candidate_entity_ids"] == [protagonist_id]
-    empty_trace_path = tmp_path / "empty-scene-trace.json"
+    empty_trace_path = tmp_path / "empty-chapter-trace.json"
     empty_trace_path.write_text(
-        SceneTraceDraft().model_dump_json(indent=2),
+        ChapterTraceDraft().model_dump_json(indent=2),
         encoding="utf-8",
     )
     missing_trace_code, missing_trace = _invoke_json(
@@ -437,11 +444,11 @@ def test_full_approved_creation_loop_publishes_two_queryable_scenes(
         first_session["writing_session_id"],
         "--draft-revision",
         first_draft["draft_revision"],
-        "--scene-summary",
-        str(first_scene_path),
         "--chapter-summary",
         str(first_chapter_path),
-        "--scene-trace",
+        "--volume-summary",
+        str(first_volume_path),
+        "--chapter-trace",
         str(empty_trace_path),
         "--review-id",
         first_review["review_id"],
@@ -459,11 +466,11 @@ def test_full_approved_creation_loop_publishes_two_queryable_scenes(
         first_session["writing_session_id"],
         "--draft-revision",
         first_draft["draft_revision"],
-        "--scene-summary",
-        str(first_scene_path),
         "--chapter-summary",
         str(first_chapter_path),
-        "--scene-trace",
+        "--volume-summary",
+        str(first_volume_path),
+        "--chapter-trace",
         str(first_trace_path),
         "--review-id",
         first_review["review_id"],
@@ -507,13 +514,17 @@ def test_full_approved_creation_loop_publishes_two_queryable_scenes(
         "session",
         "start",
         "--author-goal",
-        "写出林澜追查寄信人的场景",
+        "写出林澜追查寄信人的章节",
         "--story-time",
         str(story_time_2),
-        "--chapter-id",
+        "--volume-id",
+        first_session["target_volume_id"],
+        "--new-chapter-number",
+        "2",
+        "--new-chapter-title",
+        "盐渍",
+        "--before-chapter-id",
         first_session["target_chapter_id"],
-        "--before-scene-id",
-        first_session["target_scene_id"],
     )
     second_context = _project_call(
         capsys,
@@ -524,9 +535,9 @@ def test_full_approved_creation_loop_publishes_two_queryable_scenes(
         "--session-id",
         second_session["writing_session_id"],
     )
-    assert second_context["continuity_chapter_id"] == first_session["target_chapter_id"]
-    assert second_context["continuity_scene_ids"] == [first_session["target_scene_id"]]
-    assert second_context["required_chapter_heading"] is None
+    assert second_context["continuity_volume_id"] == first_session["target_volume_id"]
+    assert second_context["continuity_chapter_ids"] == [first_session["target_chapter_id"]]
+    assert second_context["required_chapter_heading"] == "# 第二章　盐渍"
     second_continuity = _project_call(
         capsys,
         catalog,
@@ -537,19 +548,19 @@ def test_full_approved_creation_loop_publishes_two_queryable_scenes(
         second_session["writing_session_id"],
     )
     assert second_continuity["satisfied"] is False
-    assert second_continuity["missing_scene_ids"] == [first_session["target_scene_id"]]
+    assert second_continuity["missing_chapter_ids"] == [first_session["target_chapter_id"]]
     historical = _project_call(
         capsys,
         catalog,
         root,
         "memory",
-        "read-scene",
+        "read-chapter",
         "--session-id",
         second_session["writing_session_id"],
+        "--volume-id",
+        first_session["target_volume_id"],
         "--chapter-id",
         first_session["target_chapter_id"],
-        "--scene-id",
-        first_session["target_scene_id"],
     )
     assert "林澜拆开了那封信" in historical["text"]
     second_continuity = _project_call(
@@ -562,7 +573,7 @@ def test_full_approved_creation_loop_publishes_two_queryable_scenes(
         second_session["writing_session_id"],
     )
     assert second_continuity["satisfied"] is True
-    assert second_continuity["missing_scene_ids"] == []
+    assert second_continuity["missing_chapter_ids"] == []
     shown_session = _project_call(
         capsys,
         catalog,
@@ -600,9 +611,9 @@ def test_full_approved_creation_loop_publishes_two_queryable_scenes(
     )
     assert "收到一封旧信" in (root / "intent" / "current-outline.md").read_text(encoding="utf-8")
 
-    second_draft_file = tmp_path / "second-scene.md"
+    second_draft_file = tmp_path / "second-chapter.md"
     second_draft_file.write_text(
-        "# 盐渍\n\n林澜把信纸举向灯下，秦渡指着潮汐留下的地图。\n",
+        "# 第二章　盐渍\n\n林澜把信纸举向灯下，秦渡指着潮汐留下的地图。\n",
         encoding="utf-8",
     )
     second_draft = _project_call(
@@ -634,12 +645,12 @@ def test_full_approved_creation_loop_publishes_two_queryable_scenes(
         retrieved_id,
     )
     second_session["draft_revision"] = second_draft["draft_revision"]
-    second_scene_path, second_chapter_path = _write_summaries(
+    second_chapter_path, second_volume_path = _write_summaries(
         tmp_path / "summaries",
-        scene_number=2,
+        chapter_number=2,
     )
-    second_trace_path = _write_scene_trace(
-        tmp_path / "second-scene-trace.json",
+    second_trace_path = _write_chapter_trace(
+        tmp_path / "second-chapter-trace.json",
         second_draft_file.read_text(encoding="utf-8"),
         protagonist_id=protagonist_id,
         include_new_character=True,
@@ -654,11 +665,11 @@ def test_full_approved_creation_loop_publishes_two_queryable_scenes(
         second_session["writing_session_id"],
         "--draft-revision",
         second_draft["draft_revision"],
-        "--scene-summary",
-        str(second_scene_path),
         "--chapter-summary",
         str(second_chapter_path),
-        "--scene-trace",
+        "--volume-summary",
+        str(second_volume_path),
+        "--chapter-trace",
         str(second_trace_path),
         "--review-id",
         second_review["review_id"],
@@ -726,12 +737,16 @@ def test_full_approved_creation_loop_publishes_two_queryable_scenes(
         "检查插入位置的身份可见边界",
         "--story-time",
         str(insertion_story_time),
-        "--chapter-id",
+        "--volume-id",
+        first_session["target_volume_id"],
+        "--new-chapter-number",
+        "99",
+        "--new-chapter-title",
+        "插入验证",
+        "--before-chapter-id",
         first_session["target_chapter_id"],
-        "--before-scene-id",
-        first_session["target_scene_id"],
-        "--after-scene-id",
-        second_session["target_scene_id"],
+        "--after-chapter-id",
+        second_session["target_chapter_id"],
     )
     hidden_future_entity = _project_call(
         capsys,
@@ -760,11 +775,11 @@ def test_full_approved_creation_loop_publishes_two_queryable_scenes(
     assert len(ledger_lines) == 3
     connection = sqlite3.connect(root / ".novel" / "project.sqlite")
     try:
-        assert connection.execute("SELECT COUNT(*) FROM scenes").fetchone()[0] == 2
+        assert connection.execute("SELECT COUNT(*) FROM chapters").fetchone()[0] == 2
         assert connection.execute("SELECT COUNT(*) FROM entities").fetchone()[0] == 2
-        assert connection.execute("SELECT COUNT(*) FROM scene_traces").fetchone()[0] == 2
+        assert connection.execute("SELECT COUNT(*) FROM chapter_traces").fetchone()[0] == 2
         assert (
-            connection.execute("SELECT COUNT(*) FROM scene_entity_occurrences").fetchone()[0] == 3
+            connection.execute("SELECT COUNT(*) FROM chapter_entity_occurrences").fetchone()[0] == 3
         )
         assert connection.execute("SELECT COUNT(*) FROM draft_revisions").fetchone()[0] == 2
         assert connection.execute("SELECT COUNT(*) FROM reviews").fetchone()[0] == 2
@@ -778,8 +793,8 @@ def test_full_approved_creation_loop_publishes_two_queryable_scenes(
     finally:
         connection.close()
 
-    # Simulate an upgraded project whose first approved Scene predates Scene Trace support.
-    first_trace_source = root / "memory" / "traces" / f"{first_session['target_scene_id']}.json"
+    # Simulate an upgraded project whose first approved Chapter predates Chapter Trace support.
+    first_trace_source = root / "memory" / "traces" / f"{first_session['target_chapter_id']}.json"
     first_trace_source.unlink()
     backfill_source = _project_call(
         capsys,
@@ -787,10 +802,10 @@ def test_full_approved_creation_loop_publishes_two_queryable_scenes(
         root,
         "trace-backfill",
         "source",
+        "--volume-id",
+        first_session["target_volume_id"],
         "--chapter-id",
         first_session["target_chapter_id"],
-        "--scene-id",
-        first_session["target_scene_id"],
     )
     assert backfill_source["current_trace"] is None
     assert backfill_source["source_revision"] == first_draft["draft_revision"]
@@ -811,13 +826,13 @@ def test_full_approved_creation_loop_publishes_two_queryable_scenes(
         str(root),
         "trace-backfill",
         "prepare",
+        "--volume-id",
+        first_session["target_volume_id"],
         "--chapter-id",
         first_session["target_chapter_id"],
-        "--scene-id",
-        first_session["target_scene_id"],
         "--source-revision",
         backfill_source["source_revision"],
-        "--scene-trace",
+        "--chapter-trace",
         str(empty_trace_path),
     )
     assert missing_backfill_code == EXIT_CONFLICT
@@ -826,9 +841,9 @@ def test_full_approved_creation_loop_publishes_two_queryable_scenes(
     backfill_text = backfill_source["text"]
     protagonist_start = backfill_text.index("林澜")
     letter_start = backfill_text.index("那封信")
-    backfill_trace = SceneTraceDraft(
+    backfill_trace = ChapterTraceDraft(
         new_entities=(
-            SceneTraceEntityDraft(
+            ChapterTraceEntityDraft(
                 temporary_name="old_letter",
                 entity_type="object",
                 display_name="旧信",
@@ -844,7 +859,7 @@ def test_full_approved_creation_loop_publishes_two_queryable_scenes(
                 resolution_status=EntityResolutionStatus.RESOLVED_EXISTING,
                 considered_entity_ids=(UUID(protagonist_id),),
                 resolved_entity_id=UUID(protagonist_id),
-                resolution_reason="精确候选与本场行动主体一致。",
+                resolution_reason="精确候选与本章行动主体一致。",
             ),
             EntityMentionDraft(
                 mention_ordinal=2,
@@ -854,17 +869,17 @@ def test_full_approved_creation_loop_publishes_two_queryable_scenes(
                 mention_form=EntityMentionForm.DESCRIPTION,
                 resolution_status=EntityResolutionStatus.RESOLVED_NEW,
                 new_entity_temporary_name="old_letter",
-                resolution_reason="正文明确指向贯穿后续场景的具体信件。",
+                resolution_reason="正文明确指向贯穿后续章节的具体信件。",
             ),
         ),
         entity_occurrences=(
-            SceneEntityOccurrenceDraft(
+            ChapterEntityOccurrenceDraft(
                 resolved_entity_id=UUID(protagonist_id),
                 presence_kind=EntityPresenceKind.PRESENT,
                 prominence=EntityProminence.FOCUS,
                 mention_ordinals=(1,),
             ),
-            SceneEntityOccurrenceDraft(
+            ChapterEntityOccurrenceDraft(
                 new_entity_temporary_name="old_letter",
                 presence_kind=EntityPresenceKind.PRESENT,
                 prominence=EntityProminence.SUPPORTING,
@@ -873,7 +888,7 @@ def test_full_approved_creation_loop_publishes_two_queryable_scenes(
         ),
         scan_notes=("按准确批准正文完成历史 Trace 回填。",),
     )
-    backfill_trace_path = tmp_path / "first-scene-backfill-trace.json"
+    backfill_trace_path = tmp_path / "first-chapter-backfill-trace.json"
     backfill_trace_path.write_text(
         backfill_trace.model_dump_json(indent=2),
         encoding="utf-8",
@@ -884,18 +899,18 @@ def test_full_approved_creation_loop_publishes_two_queryable_scenes(
         root,
         "trace-backfill",
         "prepare",
+        "--volume-id",
+        first_session["target_volume_id"],
         "--chapter-id",
         first_session["target_chapter_id"],
-        "--scene-id",
-        first_session["target_scene_id"],
         "--source-revision",
         backfill_source["source_revision"],
-        "--scene-trace",
+        "--chapter-trace",
         str(backfill_trace_path),
     )
     backfill_plan = prepared_backfill["plan"]
     assert prepared_backfill["status"] == "prepared"
-    assert backfill_plan["base_scene_trace_digest"] is None
+    assert backfill_plan["base_chapter_trace_digest"] is None
     assert backfill_plan["ledger_entry"]["records"][0]["record_type"] == "entity"
     assert "+ entity:" in backfill_plan["canon_diff"]
 
@@ -961,10 +976,10 @@ def test_full_approved_creation_loop_publishes_two_queryable_scenes(
         root,
         "trace-backfill",
         "source",
+        "--volume-id",
+        first_session["target_volume_id"],
         "--chapter-id",
         first_session["target_chapter_id"],
-        "--scene-id",
-        first_session["target_scene_id"],
     )
     assert refreshed_source["current_trace"] is not None
     assert refreshed_source["current_trace_stale"] is False
@@ -981,7 +996,7 @@ def test_full_approved_creation_loop_publishes_two_queryable_scenes(
     assert len(backfill_entity_line["occurrences"]) == 2
 
     heading_letter_start = backfill_text.index("旧信")
-    correction_trace = SceneTraceDraft(
+    correction_trace = ChapterTraceDraft(
         mentions=(
             EntityMentionDraft(
                 mention_ordinal=1,
@@ -991,7 +1006,7 @@ def test_full_approved_creation_loop_publishes_two_queryable_scenes(
                 mention_form=EntityMentionForm.NAME,
                 resolution_status=EntityResolutionStatus.IGNORED,
                 considered_entity_ids=(UUID(old_letter_id),),
-                resolution_reason="这是 Chapter 标题文字，不是叙事中的 Entity Mention。",
+                resolution_reason="这是 Volume 标题文字，不是叙事中的 Entity Mention。",
             ),
             EntityMentionDraft(
                 mention_ordinal=2,
@@ -1017,13 +1032,13 @@ def test_full_approved_creation_loop_publishes_two_queryable_scenes(
             ),
         ),
         entity_occurrences=(
-            SceneEntityOccurrenceDraft(
+            ChapterEntityOccurrenceDraft(
                 resolved_entity_id=UUID(protagonist_id),
                 presence_kind=EntityPresenceKind.PRESENT,
                 prominence=EntityProminence.FOCUS,
                 mention_ordinals=(2,),
             ),
-            SceneEntityOccurrenceDraft(
+            ChapterEntityOccurrenceDraft(
                 resolved_entity_id=UUID(old_letter_id),
                 presence_kind=EntityPresenceKind.PRESENT,
                 prominence=EntityProminence.SUPPORTING,
@@ -1032,7 +1047,7 @@ def test_full_approved_creation_loop_publishes_two_queryable_scenes(
         ),
         scan_notes=("修正历史 Trace，复用已批准 Entity 身份。",),
     )
-    correction_path = tmp_path / "first-scene-corrected-trace.json"
+    correction_path = tmp_path / "first-chapter-corrected-trace.json"
     correction_path.write_text(
         correction_trace.model_dump_json(indent=2),
         encoding="utf-8",
@@ -1043,17 +1058,17 @@ def test_full_approved_creation_loop_publishes_two_queryable_scenes(
         root,
         "trace-backfill",
         "prepare",
+        "--volume-id",
+        first_session["target_volume_id"],
         "--chapter-id",
         first_session["target_chapter_id"],
-        "--scene-id",
-        first_session["target_scene_id"],
         "--source-revision",
         refreshed_source["source_revision"],
-        "--scene-trace",
+        "--chapter-trace",
         str(correction_path),
     )
     correction_plan = correction["plan"]
-    assert correction_plan["base_scene_trace_digest"] == refreshed_source["current_trace_digest"]
+    assert correction_plan["base_chapter_trace_digest"] == refreshed_source["current_trace_digest"]
     assert correction_plan["ledger_entry"] is None
     assert correction_plan["canon_diff"] == ""
     _project_call(
@@ -1085,9 +1100,9 @@ def test_full_approved_creation_loop_publishes_two_queryable_scenes(
     connection = sqlite3.connect(root / ".novel" / "project.sqlite")
     try:
         assert connection.execute("SELECT COUNT(*) FROM entities").fetchone()[0] == 3
-        assert connection.execute("SELECT COUNT(*) FROM scene_traces").fetchone()[0] == 2
+        assert connection.execute("SELECT COUNT(*) FROM chapter_traces").fetchone()[0] == 2
         assert (
-            connection.execute("SELECT COUNT(*) FROM scene_entity_occurrences").fetchone()[0] == 4
+            connection.execute("SELECT COUNT(*) FROM chapter_entity_occurrences").fetchone()[0] == 4
         )
     finally:
         connection.close()
@@ -1104,10 +1119,14 @@ def test_full_approved_creation_loop_publishes_two_queryable_scenes(
         "继续追查潮汐地图",
         "--story-time",
         str(story_time_3),
-        "--chapter-id",
-        first_session["target_chapter_id"],
-        "--before-scene-id",
-        second_session["target_scene_id"],
+        "--volume-id",
+        first_session["target_volume_id"],
+        "--new-chapter-number",
+        "3",
+        "--new-chapter-title",
+        "海图",
+        "--before-chapter-id",
+        second_session["target_chapter_id"],
     )
     third_context = _project_call(
         capsys,
@@ -1118,11 +1137,8 @@ def test_full_approved_creation_loop_publishes_two_queryable_scenes(
         "--session-id",
         third_session["writing_session_id"],
     )
-    assert third_context["continuity_chapter_id"] == first_session["target_chapter_id"]
-    assert third_context["continuity_scene_ids"] == [
-        first_session["target_scene_id"],
-        second_session["target_scene_id"],
-    ]
+    assert third_context["continuity_volume_id"] == first_session["target_volume_id"]
+    assert third_context["continuity_chapter_ids"] == [second_session["target_chapter_id"]]
     protagonist_line = _project_call(
         capsys,
         catalog,
@@ -1147,9 +1163,9 @@ def test_full_approved_creation_loop_publishes_two_queryable_scenes(
         third_session["writing_session_id"],
     )
     assert old_letter["matches"][0]["entity_id"] == old_letter_id
-    third_draft_file = tmp_path / "third-scene.md"
+    third_draft_file = tmp_path / "third-chapter.md"
     third_draft_file.write_text(
-        "# 海图\n\n林澜沿着潮线标出的旧路走向县志馆。\n",
+        "# 第三章　海图\n\n林澜沿着潮线标出的旧路走向县志馆。\n",
         encoding="utf-8",
     )
     blocked_code, blocked = _invoke_json(
@@ -1167,45 +1183,20 @@ def test_full_approved_creation_loop_publishes_two_queryable_scenes(
     )
     assert blocked_code == EXIT_CONFLICT
     assert blocked["error"]["code"] == "invalid_workflow_state"
-    assert first_session["target_scene_id"] in blocked["error"]["message"]
-    assert second_session["target_scene_id"] in blocked["error"]["message"]
+    assert second_session["target_chapter_id"] in blocked["error"]["message"]
 
     _project_call(
         capsys,
         catalog,
         root,
         "memory",
-        "read-scene",
+        "read-chapter",
         "--session-id",
         third_session["writing_session_id"],
+        "--volume-id",
+        first_session["target_volume_id"],
         "--chapter-id",
-        first_session["target_chapter_id"],
-        "--scene-id",
-        second_session["target_scene_id"],
-    )
-    partial_continuity = _project_call(
-        capsys,
-        catalog,
-        root,
-        "session",
-        "continuity-status",
-        "--session-id",
-        third_session["writing_session_id"],
-    )
-    assert partial_continuity["satisfied"] is False
-    assert partial_continuity["missing_scene_ids"] == [first_session["target_scene_id"]]
-    _project_call(
-        capsys,
-        catalog,
-        root,
-        "memory",
-        "read-scene",
-        "--session-id",
-        third_session["writing_session_id"],
-        "--chapter-id",
-        first_session["target_chapter_id"],
-        "--scene-id",
-        first_session["target_scene_id"],
+        second_session["target_chapter_id"],
     )
     complete_continuity = _project_call(
         capsys,
@@ -1217,7 +1208,7 @@ def test_full_approved_creation_loop_publishes_two_queryable_scenes(
         third_session["writing_session_id"],
     )
     assert complete_continuity["satisfied"] is True
-    assert complete_continuity["missing_scene_ids"] == []
+    assert complete_continuity["missing_chapter_ids"] == []
     _project_call(
         capsys,
         catalog,
@@ -1256,3 +1247,271 @@ def test_full_approved_creation_loop_publishes_two_queryable_scenes(
     assert cross_code == EXIT_PROJECT
     assert cross["error"]["code"] == "workflow_not_found"
     assert not (other_root / "runs").exists()
+
+    revision_session = _project_call(
+        capsys,
+        catalog,
+        root,
+        "session",
+        "start",
+        "--author-goal",
+        "压缩第二章并保留林澜的行动结果",
+        "--revise-chapter-id",
+        second_session["target_chapter_id"],
+    )
+    assert revision_session["mode"] == "revise"
+    assert revision_session["target_chapter_id"] == second_session["target_chapter_id"]
+    assert revision_session["target_document_id"] == second_session["target_document_id"]
+    assert revision_session["base_document_revision"] == second_plan["manuscript_digest"]
+    revision_context = _project_call(
+        capsys,
+        catalog,
+        root,
+        "session",
+        "context",
+        "--session-id",
+        revision_session["writing_session_id"],
+    )
+    assert revision_context["mode"] == "revise"
+    assert revision_context["continuity_chapter_ids"] == [first_session["target_chapter_id"]]
+    assert revision_context["revision_source_chapter_id"] == second_session["target_chapter_id"]
+    assert revision_context["required_chapter_heading"] == "# 第二章　盐渍"
+
+    revised_file = tmp_path / "second-chapter-revised.md"
+    revised_file.write_text(
+        "# 第二章　盐渍\n\n林澜把潮盐抹上地图，旧路只剩一道向县志馆去的白痕。\n",
+        encoding="utf-8",
+    )
+    blocked_revision_code, blocked_revision = _invoke_json(
+        capsys,
+        "--catalog-dir",
+        str(catalog),
+        "--project",
+        str(root),
+        "draft",
+        "save",
+        "--session-id",
+        revision_session["writing_session_id"],
+        "--file",
+        str(revised_file),
+    )
+    assert blocked_revision_code == EXIT_CONFLICT
+    assert "revision source Chapter" in blocked_revision["error"]["message"]
+
+    revision_source = _project_call(
+        capsys,
+        catalog,
+        root,
+        "session",
+        "revision-source",
+        "--session-id",
+        revision_session["writing_session_id"],
+    )
+    assert revision_source["chapter_id"] == second_session["target_chapter_id"]
+    assert revision_source["document_id"] == second_session["target_document_id"]
+    assert revision_source["document_revision"] == second_plan["manuscript_digest"]
+    _project_call(
+        capsys,
+        catalog,
+        root,
+        "memory",
+        "read-chapter",
+        "--session-id",
+        revision_session["writing_session_id"],
+        "--volume-id",
+        first_session["target_volume_id"],
+        "--chapter-id",
+        first_session["target_chapter_id"],
+    )
+    revision_continuity = _project_call(
+        capsys,
+        catalog,
+        root,
+        "session",
+        "continuity-status",
+        "--session-id",
+        revision_session["writing_session_id"],
+    )
+    assert revision_continuity["satisfied"] is True
+    assert revision_continuity["revision_source_satisfied"] is True
+
+    revised_draft = _project_call(
+        capsys,
+        catalog,
+        root,
+        "draft",
+        "save",
+        "--session-id",
+        revision_session["writing_session_id"],
+        "--file",
+        str(revised_file),
+    )
+    revised_diff = _project_call(
+        capsys,
+        catalog,
+        root,
+        "draft",
+        "diff",
+        "--session-id",
+        revision_session["writing_session_id"],
+        "--draft-revision",
+        revised_draft["draft_revision"],
+    )
+    assert second_plan["manuscript_digest"] in revised_diff["diff"].splitlines()[0]
+    revised_review = _project_call(
+        capsys,
+        catalog,
+        root,
+        "review",
+        "save",
+        "--session-id",
+        revision_session["writing_session_id"],
+        "--draft-revision",
+        revised_draft["draft_revision"],
+        "--recommendation",
+        "ready",
+        "--conclusion",
+        "压缩后因果与人物视角仍然成立。",
+    )
+    revised_chapter_summary, revised_volume_summary = _write_summaries(
+        tmp_path / "revised-summaries",
+        chapter_number=2,
+    )
+    revised_trace = _write_chapter_trace(
+        tmp_path / "second-chapter-revised-trace.json",
+        revised_file.read_text(encoding="utf-8"),
+        protagonist_id=protagonist_id,
+    )
+    revised_publication = _project_call(
+        capsys,
+        catalog,
+        root,
+        "publish",
+        "prepare",
+        "--session-id",
+        revision_session["writing_session_id"],
+        "--draft-revision",
+        revised_draft["draft_revision"],
+        "--chapter-summary",
+        str(revised_chapter_summary),
+        "--volume-summary",
+        str(revised_volume_summary),
+        "--chapter-trace",
+        str(revised_trace),
+        "--review-id",
+        revised_review["review_id"],
+    )
+    revised_plan = revised_publication["plan"]
+    assert revised_plan["mode"] == "revise"
+    assert revised_plan["base_document_revision"] == second_plan["manuscript_digest"]
+    assert revised_plan["base_chapter_summary_digest"] is not None
+    assert revised_plan["base_volume_summary_digest"] is not None
+    assert revised_plan["base_chapter_trace_digest"] is not None
+    assert not revised_plan["manuscript_diff"].startswith("--- /dev/null")
+    assert revised_plan["chapter_change"]["chapter_id"] == second_session["target_chapter_id"]
+    assert revised_plan["target_document"]["document_id"] == second_session["target_document_id"]
+    assert revised_plan["volume_change"]["chapter_ids"] == [
+        first_session["target_chapter_id"],
+        second_session["target_chapter_id"],
+    ]
+    _project_call(
+        capsys,
+        catalog,
+        root,
+        "publish",
+        "approve",
+        "--publication-id",
+        revised_plan["publication_id"],
+        "--approval-digest",
+        revised_plan["approval_digest"],
+    )
+    original_manuscript_replace = FilesystemManuscriptStore.replace_document
+
+    def replace_manuscript_then_fail(store, relative_path, *, expected_revision, content):
+        original_manuscript_replace(
+            store,
+            relative_path,
+            expected_revision=expected_revision,
+            content=content,
+        )
+        raise OSError("injected post-replacement failure")
+
+    monkeypatch.setattr(
+        FilesystemManuscriptStore,
+        "replace_document",
+        replace_manuscript_then_fail,
+    )
+    revision_failed_code, revision_failed = _invoke_json(
+        capsys,
+        "--catalog-dir",
+        str(catalog),
+        "--project",
+        str(root),
+        "publish",
+        "apply",
+        "--publication-id",
+        revised_plan["publication_id"],
+    )
+    assert revision_failed_code == EXIT_STORAGE
+    assert revision_failed["error"]["code"] == "publication_recovery_required"
+    assert (root / second_session["target_document_path"]).read_bytes() == revised_file.read_bytes()
+    applying_revision = _project_call(
+        capsys,
+        catalog,
+        root,
+        "publish",
+        "inspect",
+        "--publication-id",
+        revised_plan["publication_id"],
+    )
+    assert applying_revision["status"] == "applying"
+    monkeypatch.setattr(
+        FilesystemManuscriptStore,
+        "replace_document",
+        original_manuscript_replace,
+    )
+
+    monkeypatch.setattr(SQLiteProjectionStore, "replace", fail_projection)
+    projection_failed_code, projection_failed = _invoke_json(
+        capsys,
+        "--catalog-dir",
+        str(catalog),
+        "--project",
+        str(root),
+        "publish",
+        "recover",
+        "--publication-id",
+        revised_plan["publication_id"],
+    )
+    assert projection_failed_code == EXIT_STORAGE
+    assert projection_failed["error"]["code"] == "publication_recovery_required"
+    monkeypatch.setattr(SQLiteProjectionStore, "replace", original_replace)
+    revision_unhealthy = _project_call(capsys, catalog, root, "doctor")
+    assert revision_unhealthy["healthy"] is False
+    assert any(revised_plan["publication_id"] in issue for issue in revision_unhealthy["issues"])
+    revision_applied = _project_call(
+        capsys,
+        catalog,
+        root,
+        "publish",
+        "recover",
+        "--publication-id",
+        revised_plan["publication_id"],
+    )
+    assert revision_applied["status"] == "completed"
+    assert (root / second_session["target_document_path"]).read_bytes() == revised_file.read_bytes()
+
+    revised_source = _project_call(
+        capsys,
+        catalog,
+        root,
+        "trace-backfill",
+        "source",
+        "--volume-id",
+        first_session["target_volume_id"],
+        "--chapter-id",
+        second_session["target_chapter_id"],
+    )
+    assert revised_source["text"] == revised_file.read_text(encoding="utf-8")
+    assert revised_source["source_revision"] == revised_draft["draft_revision"]
+    assert revised_source["current_trace_stale"] is False

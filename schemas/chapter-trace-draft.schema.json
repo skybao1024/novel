@@ -1,5 +1,97 @@
 {
   "$defs": {
+    "ChapterEntityOccurrenceDraft": {
+      "additionalProperties": false,
+      "properties": {
+        "mention_ordinals": {
+          "default": [],
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 256,
+          "title": "Mention Ordinals",
+          "type": "array"
+        },
+        "new_entity_temporary_name": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "New Entity Temporary Name"
+        },
+        "presence_kind": {
+          "$ref": "#/$defs/EntityPresenceKind"
+        },
+        "prominence": {
+          "$ref": "#/$defs/EntityProminence"
+        },
+        "resolved_entity_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resolved Entity Id"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "presence_kind",
+        "prominence"
+      ],
+      "title": "ChapterEntityOccurrenceDraft",
+      "type": "object"
+    },
+    "ChapterTraceEntityDraft": {
+      "additionalProperties": false,
+      "properties": {
+        "display_name": {
+          "minLength": 1,
+          "title": "Display Name",
+          "type": "string"
+        },
+        "entity_type": {
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9_-]*$",
+          "title": "Entity Type",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "temporary_name": {
+          "minLength": 1,
+          "title": "Temporary Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "temporary_name",
+        "entity_type",
+        "display_name"
+      ],
+      "title": "ChapterTraceEntityDraft",
+      "type": "object"
+    },
     "EntityMentionDraft": {
       "additionalProperties": false,
       "properties": {
@@ -129,108 +221,16 @@
       ],
       "title": "EntityResolutionStatus",
       "type": "string"
-    },
-    "SceneEntityOccurrenceDraft": {
-      "additionalProperties": false,
-      "properties": {
-        "mention_ordinals": {
-          "default": [],
-          "items": {
-            "type": "integer"
-          },
-          "maxItems": 256,
-          "title": "Mention Ordinals",
-          "type": "array"
-        },
-        "new_entity_temporary_name": {
-          "anyOf": [
-            {
-              "minLength": 1,
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "New Entity Temporary Name"
-        },
-        "presence_kind": {
-          "$ref": "#/$defs/EntityPresenceKind"
-        },
-        "prominence": {
-          "$ref": "#/$defs/EntityProminence"
-        },
-        "resolved_entity_id": {
-          "anyOf": [
-            {
-              "format": "uuid",
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Resolved Entity Id"
-        },
-        "schema_version": {
-          "const": "1.0.0",
-          "default": "1.0.0",
-          "title": "Schema Version",
-          "type": "string"
-        }
-      },
-      "required": [
-        "presence_kind",
-        "prominence"
-      ],
-      "title": "SceneEntityOccurrenceDraft",
-      "type": "object"
-    },
-    "SceneTraceEntityDraft": {
-      "additionalProperties": false,
-      "properties": {
-        "display_name": {
-          "minLength": 1,
-          "title": "Display Name",
-          "type": "string"
-        },
-        "entity_type": {
-          "minLength": 1,
-          "pattern": "^[a-z][a-z0-9_-]*$",
-          "title": "Entity Type",
-          "type": "string"
-        },
-        "schema_version": {
-          "const": "1.0.0",
-          "default": "1.0.0",
-          "title": "Schema Version",
-          "type": "string"
-        },
-        "temporary_name": {
-          "minLength": 1,
-          "title": "Temporary Name",
-          "type": "string"
-        }
-      },
-      "required": [
-        "temporary_name",
-        "entity_type",
-        "display_name"
-      ],
-      "title": "SceneTraceEntityDraft",
-      "type": "object"
     }
   },
-  "$id": "https://novel.local/schemas/scene-trace-draft.schema.json",
+  "$id": "https://novel.local/schemas/chapter-trace-draft.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
     "entity_occurrences": {
       "default": [],
       "items": {
-        "$ref": "#/$defs/SceneEntityOccurrenceDraft"
+        "$ref": "#/$defs/ChapterEntityOccurrenceDraft"
       },
       "maxItems": 256,
       "title": "Entity Occurrences",
@@ -248,7 +248,7 @@
     "new_entities": {
       "default": [],
       "items": {
-        "$ref": "#/$defs/SceneTraceEntityDraft"
+        "$ref": "#/$defs/ChapterTraceEntityDraft"
       },
       "maxItems": 64,
       "title": "New Entities",
@@ -271,7 +271,7 @@
       "type": "string"
     }
   },
-  "title": "SceneTraceDraft",
+  "title": "ChapterTraceDraft",
   "type": "object",
   "x-schema-version": "1.0.0"
 }

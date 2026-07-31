@@ -66,7 +66,7 @@ class CanonChangeSet(VersionedDomainModel):
 
     change_set_id: UUID
     base_revision: NonEmptyText
-    source_scene_id: UUID | None = None
+    source_chapter_id: UUID | None = None
     operations: Annotated[tuple[ChangeSetOperation, ...], Field(min_length=1)]
     approved_at: AwareDatetime
 

@@ -51,6 +51,34 @@ workspace, directly in the project top level, or inside formal `intent/`, `runs/
    Bootstrap Entity drafts containing only temporary name, type, and display name; the
    Application allocates their stable IDs before approval. Store these inputs under
    `<root>/candidates/bootstrap/<bootstrap-id>/`.
+   For a new novel, make the candidate Writing Rules contain an explicit author-approved Voice
+   Contract before treating Bootstrap as ready. Include:
+
+   - target readers, likely reading conditions, and what must remain clear on one continuous first
+     read;
+   - narrative distance and what each intended viewpoint notices, ignores, misunderstands, or
+     refuses to explain;
+   - familiar, precise diction as the baseline, with project-grounded exceptions for archaic,
+     technical, dialectal, or world-specific language;
+   - sentence-level clarity of actors, actions, referents, and causal turns under ordinary and
+     high-pressure conditions;
+   - paragraph focal hierarchy and how prose space follows narrative importance;
+   - relationship-specific dialogue tactics such as evasion, interruption, withholding, and
+     misreading;
+   - permitted silence, roughness, repetition, and incompleteness;
+   - prohibited generic literary defaults;
+   - author-provided or author-approved positive voice anchors and negative anchors with the
+     reason each is accepted or rejected.
+
+   When the author has not supplied prose anchors, prepare two or three short, labeled calibration
+   candidates under `<root>/candidates/bootstrap/<bootstrap-id>/voice-calibration/`. Ask the author
+   to select, revise, combine, or reject them before finalizing the candidate Writing Rules. Treat
+   every calibration passage as a discussion artifact, not manuscript or approved Intent. Do not
+   infer the opening voice from genre convention, generalized “human style,” or imitation of a
+   named author, and do not leave placeholder voice rules for the first Writing Session to invent.
+   Reject a calibration anchor whose distinctiveness depends mainly on rare wording, tangled
+   syntax, compressed logic, or unclear emphasis unless the author approves that exact reader
+   effect for a project-specific reason.
 6. Save the candidate:
 
    ```text
@@ -77,6 +105,10 @@ Do not treat “continue”, ordinary feedback, or approval of another revision 
 3. Run `intent inspect`; show its Diff and digest, then wait.
 4. After exact author approval, call `intent approve`. Use `intent apply` for a standalone change,
    or leave it approved for inclusion by ID in a Publish Plan.
+
+When an author-confirmed Chapter plan would materially change Current Outline, apply the exact
+Intent Revision before prose drafting, then return to `$novel-writing`, reacquire Creation Context,
+and confirm the final aligned plan. Chapter-plan confirmation is not Intent approval.
 
 Never edit formal Intent files, the Ledger, or SQLite directly.
 

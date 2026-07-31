@@ -163,8 +163,8 @@ novel project list|create|add|show|remove
 novel diagnostics list|show
 novel bootstrap start|save|inspect|approve|apply
 novel intent show|prepare|inspect|approve|apply
-novel session start|show|context|close
-novel memory chapters|scenes|search-summaries|read-scene
+novel session start|show|context|continuity-status|revision-source|close
+novel memory volumes|chapters|search-summaries|read-chapter
 novel memory entity-line
 novel query entity|character|events|event-chain|source
 novel draft save|list|show|diff|entity-candidates
@@ -183,15 +183,25 @@ novel schema show
 `0002_creation_runs` 只保存这些记录的最小查询索引；删除数据库后，`rebuild` 会从运行
 文件恢复索引。
 
+Review `ready` 后的作者 Draft 确认是 Plugin 执行的创作顺序检查点，不新增 CLI 命令或
+SQLite 状态。Skill 必须明确展示并绑定准确 Draft revision；保存新 revision 后重新确认。
+只有这个检查点完成后才调用现有 Entity、Summary、Canon 和 Publication 命令。正式写入仍
+只接受准确 Publication ID 与 approval digest。
+
 Session 模式的 `memory`、`resolve` 和 `query` 调用携带 `--session-id`。Application 使用
 Session 中保存的 Narrative Order 边界并自动写入 `retrieved_sources`；不能通过临时换一个
-`--before-scene` 绕过 Session 边界。
+`--before-chapter` 绕过 Session 边界。
+
+`session start --revise-chapter-id <uuid>` 建立已批准 Chapter 的受控修订；它不接受新 Volume、
+插入边界、StoryTime、POV 或地点覆盖参数。`session revision-source --session-id <uuid>`
+是唯一允许该 Session 读取目标旧正文的入口，普通历史命令仍遵守目标前边界。
 
 ## 7. 项目锁与并发
 
 - 多个读取可以并行。
 - 每个项目同一时间只有一个写事务。
-- Bootstrap apply、正式意图修改、Publish apply 和 Trace Backfill apply 获取项目写锁。
+- Bootstrap apply、正式意图修改、Publish apply（含 Chapter 修订）和 Trace Backfill apply
+  获取项目写锁。
 - 锁文件包含 PID 和随机 token。
 - 只有确认所属进程不存在的有效锁可以自动清理。
 - 锁内重新读取 Manifest、Ledger 和目标文件 revision。
@@ -220,7 +230,7 @@ Session 中保存的 Narrative Order 边界并自动写入 `retrieved_sources`�
 并给出准确 Backfill ID。恢复只能调用
 `trace-backfill recover --backfill-id <id>` 前滚同一批准计划。
 
-`rebuild` 从 Manifest、Intent、Ledger、Chapter、Summary 和运行记录重建新数据库，完成
+`rebuild` 从 Manifest、Intent、Ledger、Volume、Summary 和运行记录重建新数据库，完成
 校验后再安装。重建失败不能修改权威文件。
 
 ## 9. 运行产物和清理

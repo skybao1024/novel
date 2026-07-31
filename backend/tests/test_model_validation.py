@@ -13,7 +13,12 @@ from novel_core import (
     AssertionStance,
     ChangeSetOperation,
     ChangeSetOperationKind,
-    ContinuitySceneStatus,
+    ChapterEntityOccurrence,
+    ChapterTrace,
+    ChapterTraceBackfill,
+    ChapterTraceBackfillPlan,
+    ChapterTraceBackfillStatus,
+    ContinuityChapterStatus,
     ContinuityStatus,
     Entity,
     EntityMention,
@@ -28,11 +33,6 @@ from novel_core import (
     ProjectCatalogEntry,
     ProjectStatus,
     Proposition,
-    SceneEntityOccurrence,
-    SceneTrace,
-    SceneTraceBackfill,
-    SceneTraceBackfillPlan,
-    SceneTraceBackfillStatus,
     StoryTime,
     StoryTimeKind,
     chapter_heading,
@@ -121,7 +121,7 @@ def test_entity_id_cannot_be_a_display_name() -> None:
         Entity.model_validate_json(payload)
 
 
-def test_scene_trace_requires_resolved_mentions_to_link_to_one_occurrence() -> None:
+def test_chapter_trace_requires_resolved_mentions_to_link_to_one_occurrence() -> None:
     entity_id = uuid4()
     mention = EntityMention(
         mention_id=uuid4(),
@@ -136,41 +136,41 @@ def test_scene_trace_requires_resolved_mentions_to_link_to_one_occurrence() -> N
         resolved_entity_id=entity_id,
         resolution_reason="唯一候选并与上下文一致。",
     )
-    occurrence = SceneEntityOccurrence(
+    occurrence = ChapterEntityOccurrence(
         occurrence_id=uuid4(),
         entity_id=entity_id,
         presence_kind=EntityPresenceKind.PRESENT,
         prominence=EntityProminence.FOCUS,
         mention_ids=(mention.mention_id,),
     )
-    trace = SceneTrace(
-        scene_trace_id=uuid4(),
-        scene_id=uuid4(),
+    trace = ChapterTrace(
+        chapter_trace_id=uuid4(),
         chapter_id=uuid4(),
+        volume_id=uuid4(),
         source_document_id=uuid4(),
         source_revision="sha256:" + "1" * 64,
         mentions=(mention,),
         entity_occurrences=(occurrence,),
     )
-    assert SceneTrace.from_json(trace.to_canonical_json()) == trace
+    assert ChapterTrace.from_json(trace.to_canonical_json()) == trace
 
     with pytest.raises(ValidationError, match="every resolved Entity Mention"):
-        SceneTrace(
-            scene_trace_id=uuid4(),
-            scene_id=trace.scene_id,
+        ChapterTrace(
+            chapter_trace_id=uuid4(),
             chapter_id=trace.chapter_id,
+            volume_id=trace.volume_id,
             source_document_id=trace.source_document_id,
             source_revision=trace.source_revision,
             mentions=(mention,),
         )
 
 
-def test_published_scene_trace_rejects_ambiguous_mentions() -> None:
+def test_published_chapter_trace_rejects_ambiguous_mentions() -> None:
     with pytest.raises(ValidationError, match="ambiguous"):
-        SceneTrace(
-            scene_trace_id=uuid4(),
-            scene_id=uuid4(),
+        ChapterTrace(
+            chapter_trace_id=uuid4(),
             chapter_id=uuid4(),
+            volume_id=uuid4(),
             source_document_id=uuid4(),
             source_revision="sha256:" + "2" * 64,
             mentions=(
@@ -189,38 +189,38 @@ def test_published_scene_trace_rejects_ambiguous_mentions() -> None:
         )
 
 
-def test_scene_trace_backfill_binds_exact_trace_and_approval() -> None:
-    trace = SceneTrace(
-        scene_trace_id=uuid4(),
-        scene_id=uuid4(),
+def test_chapter_trace_backfill_binds_exact_trace_and_approval() -> None:
+    trace = ChapterTrace(
+        chapter_trace_id=uuid4(),
         chapter_id=uuid4(),
+        volume_id=uuid4(),
         source_document_id=uuid4(),
         source_revision="sha256:" + "3" * 64,
     )
     backfill_id = uuid4()
     approval_value = "sha256:" + "4" * 64
-    plan = SceneTraceBackfillPlan(
+    plan = ChapterTraceBackfillPlan(
         backfill_id=backfill_id,
         project_id=uuid4(),
+        volume_id=trace.volume_id,
         chapter_id=trace.chapter_id,
-        scene_id=trace.scene_id,
         source_document_id=trace.source_document_id,
         source_revision=trace.source_revision,
         base_canon_revision="sha256:" + "5" * 64,
-        scene_trace_change=trace,
-        scene_trace_diff="--- /dev/null\n+++ scene-trace\n",
+        chapter_trace_change=trace,
+        chapter_trace_diff="--- /dev/null\n+++ chapter-trace\n",
         approval_digest=approval_value,
         prepared_at=datetime.now(UTC),
     )
-    prepared = SceneTraceBackfill(
+    prepared = ChapterTraceBackfill(
         plan=plan,
-        status=SceneTraceBackfillStatus.PREPARED,
+        status=ChapterTraceBackfillStatus.PREPARED,
     )
-    assert SceneTraceBackfill.from_json(prepared.to_canonical_json()) == prepared
+    assert ChapterTraceBackfill.from_json(prepared.to_canonical_json()) == prepared
 
-    approved = SceneTraceBackfill(
+    approved = ChapterTraceBackfill(
         plan=plan,
-        status=SceneTraceBackfillStatus.APPROVED,
+        status=ChapterTraceBackfillStatus.APPROVED,
         approval=Approval(
             operation_id=backfill_id,
             approval_digest=approval_value,
@@ -229,12 +229,12 @@ def test_scene_trace_backfill_binds_exact_trace_and_approval() -> None:
     )
     assert approved.approval is not None
     with pytest.raises(ValidationError, match="exact approval"):
-        SceneTraceBackfill(
+        ChapterTraceBackfill(
             plan=plan,
-            status=SceneTraceBackfillStatus.APPROVED,
+            status=ChapterTraceBackfillStatus.APPROVED,
         )
     with pytest.raises(ValidationError, match="cannot contain Canon Diff"):
-        SceneTraceBackfillPlan(
+        ChapterTraceBackfillPlan(
             **{
                 **plan.model_dump(),
                 "canon_diff": "+ entity:unexpected",
@@ -413,11 +413,11 @@ def test_project_catalog_is_strict_unique_and_round_trips() -> None:
 
 
 def test_continuity_status_is_consistent_and_round_trips() -> None:
-    chapter_id = uuid4()
-    missing_scene_id = uuid4()
-    scene = ContinuitySceneStatus(
-        chapter_id=chapter_id,
-        scene_id=missing_scene_id,
+    volume_id = uuid4()
+    missing_chapter_id = uuid4()
+    chapter = ContinuityChapterStatus(
+        volume_id=volume_id,
+        chapter_id=missing_chapter_id,
         document_id=uuid4(),
         document_revision=f"sha256:{'1' * 64}",
         narrative_order=1,
@@ -425,25 +425,25 @@ def test_continuity_status_is_consistent_and_round_trips() -> None:
     )
     status = ContinuityStatus(
         writing_session_id=uuid4(),
-        continuity_chapter_id=chapter_id,
-        required_scenes=(scene,),
-        missing_scene_ids=(missing_scene_id,),
+        continuity_volume_id=volume_id,
+        required_chapters=(chapter,),
+        missing_chapter_ids=(missing_chapter_id,),
         satisfied=False,
     )
 
     assert ContinuityStatus.from_json(status.to_canonical_json()) == status
-    with pytest.raises(ValidationError, match="missing_scene_ids"):
+    with pytest.raises(ValidationError, match="missing_chapter_ids"):
         ContinuityStatus(
             writing_session_id=status.writing_session_id,
-            continuity_chapter_id=chapter_id,
-            required_scenes=(scene,),
-            missing_scene_ids=(),
+            continuity_volume_id=volume_id,
+            required_chapters=(chapter,),
+            missing_chapter_ids=(),
             satisfied=True,
         )
     with pytest.raises(ValidationError, match="satisfaction"):
-        ContinuitySceneStatus.model_validate(
+        ContinuityChapterStatus.model_validate(
             {
-                **scene.model_dump(),
+                **chapter.model_dump(),
                 "retrieved_source_ids": (uuid4(),),
                 "satisfied": False,
             }

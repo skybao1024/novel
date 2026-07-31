@@ -1,5 +1,5 @@
 {
-  "$id": "https://novel.local/schemas/scene-trace-entity-draft.schema.json",
+  "$id": "https://novel.local/schemas/chapter-trace-entity-draft.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
@@ -31,7 +31,7 @@
     "entity_type",
     "display_name"
   ],
-  "title": "SceneTraceEntityDraft",
+  "title": "ChapterTraceEntityDraft",
   "type": "object",
   "x-schema-version": "1.0.0"
 }

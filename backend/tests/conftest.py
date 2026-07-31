@@ -12,6 +12,9 @@ from novel_core import (
     CanonChangeSet,
     CanonLedgerEntry,
     ChangeSetLedgerRecord,
+    Chapter,
+    ChapterLedgerRecord,
+    ChapterStatus,
     Document,
     DocumentKind,
     DocumentLedgerRecord,
@@ -23,9 +26,6 @@ from novel_core import (
     EventEdge,
     EventEdgeLedgerRecord,
     EventLedgerRecord,
-    Scene,
-    SceneLedgerRecord,
-    SceneStatus,
     SourceRef,
     SourceRefLedgerRecord,
     StoryTime,
@@ -65,15 +65,15 @@ def continuity_case() -> dict[str, Any]:
 def ledger_entries(continuity_case: dict[str, Any]) -> tuple[CanonLedgerEntry, ...]:
     document = Document(
         document_id=UUID("20000000-0000-4000-8000-000000000001"),
-        relative_path="manuscript/volume-001/chapter-001.md",
+        relative_path="manuscript/volume-001/volume-001.md",
         document_kind=DocumentKind.MANUSCRIPT,
-        revision="sha256:chapter-001-current",
+        revision="sha256:volume-001-current",
     )
-    scenes = (
-        _scene(1, story_ordinal=15, narrative_order=1, document=document),
-        _scene(2, story_ordinal=20, narrative_order=2, document=document),
-        _scene(3, story_ordinal=30, narrative_order=3, document=document),
-        _scene(4, story_ordinal=10, narrative_order=4, document=document),
+    chapters = (
+        _chapter(1, story_ordinal=15, narrative_order=1, document=document),
+        _chapter(2, story_ordinal=20, narrative_order=2, document=document),
+        _chapter(3, story_ordinal=30, narrative_order=3, document=document),
+        _chapter(4, story_ordinal=10, narrative_order=4, document=document),
     )
     alias = EntityAlias(
         alias_id=UUID("01000000-0000-4000-8000-000000000001"),
@@ -91,12 +91,12 @@ def ledger_entries(continuity_case: dict[str, Any]) -> tuple[CanonLedgerEntry, .
         ledger_entry_id=UUID("a0000000-0000-4000-8000-000000000001"),
         base_revision=EMPTY_CANON_REVISION,
         approved_at=first_change_set.approved_at,
-        source_scene_id=first_change_set.source_scene_id,
+        source_chapter_id=first_change_set.source_chapter_id,
         records=(
             *(EntityLedgerRecord(value=entity) for entity in continuity_case["entities"]),
             EntityAliasLedgerRecord(value=alias),
             DocumentLedgerRecord(value=document),
-            *(SceneLedgerRecord(value=scene) for scene in scenes),
+            *(ChapterLedgerRecord(value=chapter) for chapter in chapters),
             *(
                 SourceRefLedgerRecord(value=source_ref)
                 for source_ref in continuity_case["source_refs"]
@@ -117,22 +117,24 @@ def ledger_entries(continuity_case: dict[str, Any]) -> tuple[CanonLedgerEntry, .
         ledger_entry_id=UUID("a0000000-0000-4000-8000-000000000002"),
         base_revision=second_revision,
         approved_at=second_change_set.approved_at,
-        source_scene_id=second_change_set.source_scene_id,
+        source_chapter_id=second_change_set.source_chapter_id,
         records=(ChangeSetLedgerRecord(value=second_change_set),),
     )
     return first_entry, second_entry
 
 
-def _scene(
+def _chapter(
     suffix: int,
     *,
     story_ordinal: int,
     narrative_order: int,
     document: Document,
-) -> Scene:
-    return Scene(
-        scene_id=UUID(f"10000000-0000-4000-8000-{suffix:012d}"),
-        chapter_id=UUID("11000000-0000-4000-8000-000000000001"),
+) -> Chapter:
+    return Chapter(
+        chapter_id=UUID(f"10000000-0000-4000-8000-{suffix:012d}"),
+        volume_id=UUID("11000000-0000-4000-8000-000000000001"),
+        chapter_number=suffix,
+        title=f"章节 {suffix}",
         narrative_order=narrative_order,
         story_time=StoryTime(
             kind=StoryTimeKind.ORDINAL,
@@ -141,9 +143,9 @@ def _scene(
         ),
         pov_entity_id=UUID("00000000-0000-4000-8000-000000000002"),
         location_entity_id=UUID("00000000-0000-4000-8000-000000000003"),
-        status=SceneStatus.APPROVED,
+        status=ChapterStatus.APPROVED,
         source_document_id=document.document_id,
-        revision=f"scene-{suffix:03d}-revision",
+        revision=f"chapter-{suffix:03d}-revision",
     )
 
 

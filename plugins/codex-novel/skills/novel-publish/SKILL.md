@@ -1,6 +1,6 @@
 ---
 name: novel-publish
-description: Prepare, inspect, explicitly approve, apply, and recover an exact Novel Scene publication including its resolved Scene Trace. Use when a Writing Session has a stable Draft Revision, Entity resolution, and Review and Codex must generate navigation summaries and optional Intent or sparse Canon changes without bypassing the author's digest approval.
+description: Prepare, inspect, explicitly approve, apply, and recover an exact Novel Chapter publication including its resolved Chapter Trace. Use when the author has confirmed an exact Review-ready Draft Revision and Codex must perform deferred Entity resolution, generate navigation summaries and optional Intent or sparse Canon changes, and request a separate publication digest approval.
 ---
 
 # Novel Publish
@@ -27,35 +27,53 @@ workspace, directly in the project top level, or inside formal `memory/`, `canon
 
 ## Prepare
 
-1. Confirm the exact open Session, Draft revision, and one or more Reviews.
-2. Generate a UTF-8 Scene Summary that describes only the candidate Scene, a UTF-8 Chapter
-   Summary that aggregates the Chapter, and a versioned Scene Trace Draft for the exact Draft
+1. Confirm the exact open Session, Draft revision, one or more Reviews, and the author's explicit
+   confirmation of that same exact Review-`ready` Draft revision. If the confirmation is not
+   available in the current task context, return to `$novel-writing`, show the Draft, and wait;
+   Review `ready` alone does not authorize Entity resolution or publication preparation.
+   If the Session `mode` is `revise`, confirm its `base_document_revision`, exact revision-source
+   retrieval, and unchanged Chapter, Document, Volume, and Narrative Order identities.
+2. Call `draft entity-candidates` for that exact confirmed Draft revision, resolve every returned
+   match and AI-found name, pronoun, title, or description Mention under the Writing Session
+   boundary, and inspect uncertain existing identities with `memory entity-line`. Do not continue
+   while any Mention remains `ambiguous`.
+3. Generate a UTF-8 Chapter Summary that describes only the candidate Chapter, a UTF-8 Volume
+   Summary that aggregates the Volume, and a versioned Chapter Trace Draft for the exact Draft
    revision. The Trace must cover every `draft entity-candidates` hit, include AI-found pronoun,
    title, and description Mentions, contain no `ambiguous` resolution, and link every resolved
    Mention to one Entity occurrence. Optionally prepare an approved Intent Revision ID and a
    versioned JSON array of sparse Canon Ledger records. Store all generated input files in the
    project-local publication candidate directory.
-3. Call:
+4. Call:
 
    ```text
    novel --project <root> publish prepare \
      --session-id <id> --draft-revision <revision> \
-     --scene-summary <text-file> --chapter-summary <text-file> \
-     --scene-trace <json-file> \
+     --chapter-summary <text-file> --volume-summary <text-file> \
+     --chapter-trace <json-file> \
      --review-id <id> --json
    ```
 
    Add main Entity IDs, key changes, open questions, `--intent-revision-id`, or
    `--canon-records` only when they are accurate. The Application derives Summary bindings,
-   Document/Scene IDs, revisions, and dependency digests.
-4. Run `publish inspect --publication-id <id>`. Present the manuscript, structure, Summary, Scene
+   Document/Chapter IDs, revisions, and dependency digests.
+5. Run `publish inspect --publication-id <id>`. Present the manuscript, structure, Summary, Chapter
    Trace, Mention resolutions, new Entity assignments, optional Intent, Canon Diffs, Review
    conclusions, unresolved questions, exact Publication ID, and approval digest. Ask the author to
    approve that exact pair, then stop and wait.
 
-When `$novel-writing` hands off a `ready` Review, complete Prepare and Inspect in that same Codex
-turn. Do not stop after merely reporting that the Scene is ready or unpublished, and do not defer
-the approval request until the author later asks to continue writing.
+For a revision Publication, require the inspect result to show:
+
+- `mode=revise` and the exact old `base_document_revision`;
+- old formal manuscript → candidate manuscript Diff, not `/dev/null` → candidate;
+- unchanged Chapter, Document, Volume, and Narrative Order identities;
+- old → new Chapter Summary, Volume Summary, and Chapter Trace Diffs with their protected base
+  digests;
+- any sparse Canon corrections needed because the rewrite changed a previously structured fact.
+
+When `$novel-writing` hands off an author-confirmed exact `ready` Draft, complete deferred Entity
+resolution, Prepare, and Inspect in that same Codex turn. Do not infer Draft confirmation from the
+Review, and do not defer the approval request until the author later asks to continue writing.
 
 ## Approve and apply
 
@@ -66,11 +84,15 @@ If apply returns `publication_recovery_required`, do not create or approve a rep
 Report the stored Publication ID, then call `publish recover --publication-id <id>` to continue
 the already approved steps. Repeat recovery only for the same immutable plan.
 
+A revision recovery may observe either the exact approved old manuscript bytes or the already
+installed approved new bytes. Any third revision is a conflict; never directly restore, overwrite,
+or edit it.
+
 Never interpret “continue writing”, ordinary Draft feedback, or Review recommendation as publish
 approval. Never edit manuscript, navigation memory, Intent, Ledger, transaction state, or SQLite
 directly.
 
-Do not republish an approved historical Scene only to add or correct its Scene Trace. Route that
+Do not republish an approved historical Chapter only to add or correct its Chapter Trace. Route that
 explicit maintenance request to `$novel-trace-backfill`.
 
 ## Diagnostics

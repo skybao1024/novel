@@ -20,6 +20,8 @@ CREATION_SKILLS = {
     ),
     "novel-writing": (
         "session context",
+        "session revision-source",
+        "--revise-chapter-id",
         "draft save",
         "draft entity-candidates",
         "review save",
@@ -27,7 +29,7 @@ CREATION_SKILLS = {
     ),
     "novel-publish": (
         "publish prepare",
-        "--scene-trace",
+        "--chapter-trace",
         "publish approve",
         "publish recover",
         "approval_digest",
@@ -81,8 +83,11 @@ def test_plugin_manifest_and_repo_marketplace_are_installable_contracts() -> Non
     assert "backfills missing historical Traces" in long_description
     assert "compatib" not in long_description.lower()
     assert "load the selected project contract in place" in default_prompt
-    assert "keep candidate inputs contained" in default_prompt
-    assert "before ending the writing turn" in default_prompt
+    assert "one complete Chapter" in default_prompt
+    assert "confirm a causal plan before writing or revising" in default_prompt
+    assert "causal coherence and first-pass narrative clarity" in default_prompt
+    assert "exact ready Draft for author confirmation before derived clue work" in default_prompt
+    assert "surface exact approval" in default_prompt
     assert "mcpServers" not in manifest
     assert "apps" not in manifest
     assert "hooks" not in manifest
@@ -111,10 +116,10 @@ def test_plugin_exposes_creation_loop_and_ai_first_memory_skills() -> None:
     assert "AI-first" in frontmatter["description"]
     assert "legacy" not in content.lower()
     assert "[TODO:" not in content
-    assert "memory chapters" in body
-    assert "memory scenes --chapter-id" in body
+    assert "memory volumes" in body
+    assert "memory chapters --volume-id" in body
     assert "memory search-summaries" in body
-    assert "memory read-scene" in body
+    assert "memory read-chapter" in body
     assert "memory entity-line" in body
     assert "candidate location only" in body
     assert "Never query SQLite" in body
@@ -166,6 +171,32 @@ def test_bootstrap_does_not_require_a_restart_to_activate_project_guidance() -> 
     assert "guidance applies to future Codex runs" not in content
 
 
+def test_bootstrap_requires_author_approved_opening_voice_calibration() -> None:
+    content = (BOOTSTRAP_SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
+    normalized_content = " ".join(content.split())
+    metadata = (BOOTSTRAP_SKILL_ROOT / "agents" / "openai.yaml").read_text(encoding="utf-8")
+
+    assert "author-approved Voice Contract" in normalized_content
+    assert "what must remain clear on one continuous first read" in normalized_content
+    assert "familiar, precise diction as the baseline" in normalized_content
+    assert "paragraph focal hierarchy" in normalized_content
+    assert "author-approved positive voice anchors and negative anchors" in normalized_content
+    assert "voice-calibration/" in normalized_content
+    assert "select, revise, combine, or reject them" in normalized_content
+    assert "discussion artifact, not manuscript or approved Intent" in normalized_content
+    assert "genre convention, generalized “human style,” or imitation of a named author" in (
+        normalized_content
+    )
+    assert "do not leave placeholder voice rules" in normalized_content
+    assert "rare wording, tangled syntax, compressed logic, or unclear emphasis" in (
+        normalized_content
+    )
+    assert "$novel-bootstrap" in metadata
+    assert "calibrate an author-approved opening Voice Contract" in metadata
+    assert "first-pass readability and focal-hierarchy baseline" in metadata
+    assert "prepare its exact Intent Diff for approval" in metadata
+
+
 def test_writing_skill_requires_exact_predecessor_chapter_before_drafting() -> None:
     skill_root = PLUGIN_ROOT / "skills" / "novel-writing"
     content = (skill_root / "SKILL.md").read_text(encoding="utf-8")
@@ -176,29 +207,28 @@ def test_writing_skill_requires_exact_predecessor_chapter_before_drafting() -> N
     assert "Before drafting prose or saving the first Draft Revision in each Writing Session" in (
         normalized_content
     )
-    assert "`continuity_chapter_id` and every ordered `continuity_scene_ids`" in normalized_content
-    assert "call `memory read-scene` for every listed Scene" in normalized_content
+    assert "`continuity_volume_id` and `continuity_chapter_ids`" in normalized_content
+    assert "single immediately preceding approved Chapter" in normalized_content
+    assert "Read that Chapter exactly with `memory read-chapter`" in normalized_content
     assert "even when the same prose was read earlier in this Codex task" in normalized_content
     assert "`session continuity-status --session-id <id>`" in normalized_content
     assert "require `satisfied: true`" in normalized_content
     assert "remembered model context" in normalized_content
     assert "another Session's `retrieved_sources`" in normalized_content
-    assert "When the target opens a new Chapter" in normalized_content
-    assert "preceding Chapter Summary" in normalized_content
-    assert "preceding Chapter's approved Scenes" in normalized_content
+    assert "When the target opens a new Volume" in normalized_content
+    assert "preceding Volume Summary" in normalized_content
     assert "action, dialogue exchange, emotional beat" in normalized_content
-    assert "Chapter Summary → Scene Summary → stable IDs → exact approved prose" in (
+    assert "Volume Summary → Chapter Summary → stable IDs → exact approved prose" in (
         normalized_content
     )
     assert "Do not delegate the required exact reads" in normalized_content
     assert "sub-agent that may receive partial conversation context" in normalized_content
     assert "Application mechanically gates `draft save`" in normalized_content
     assert "broader query count" in normalized_content
-    assert "If `required_chapter_heading` is non-null" in normalized_content
-    assert "copy that exact value as the Draft's first line" in normalized_content
-    assert "do not repeat a Chapter heading" in normalized_content
+    assert "`required_chapter_heading` exactly as the Draft's first line" in normalized_content
+    assert "Do not translate, restyle, renumber, or replace its spacing" in normalized_content
     assert "rejects a missing or different required heading" in normalized_content
-    assert "## Entity resolution and Scene Trace" in content
+    assert "## Entity resolution and Chapter Trace" in content
     assert "`draft entity-candidates`" in normalized_content
     assert "`memory entity-line --session-id <id> --entity-id <id>`" in normalized_content
     assert "candidate, never an identity decision" in normalized_content
@@ -208,12 +238,196 @@ def test_writing_skill_requires_exact_predecessor_chapter_before_drafting() -> N
     assert "requires every mechanically returned candidate to be covered" in normalized_content
     assert "Never choose the first, unique, nearest, or fuzzy string hit" in normalized_content
     assert "partial-context sub-agent report cannot substitute" in normalized_content
-    assert "required predecessor-Chapter prose" in metadata
-    assert "exact new-Chapter heading" in metadata
-    assert "Entity mentions into a Scene Trace" in metadata
+    assert "recover exact history" in metadata
+    assert "author-visible causal Chapter plan" in metadata
+    assert "route material outline changes through approved Intent Revision" in metadata
+    assert "resolve Entity mentions" in metadata
 
 
-def test_ready_review_surfaces_publication_approval_in_the_same_turn() -> None:
+def test_writing_skill_disambiguates_chapter_insertion_boundaries() -> None:
+    skill_root = PLUGIN_ROOT / "skills" / "novel-writing"
+    content = (skill_root / "SKILL.md").read_text(encoding="utf-8")
+    normalized_content = " ".join(content.split())
+
+    assert "`--before-chapter-id <previous-chapter-id>`" in normalized_content
+    assert "append after the last approved Chapter" in normalized_content
+    assert "`--after-chapter-id <next-chapter-id>`" in normalized_content
+    assert "insert before the first approved Chapter" in normalized_content
+    assert (
+        "`--before-chapter-id <chapter-a-id> --after-chapter-id <chapter-b-id>`"
+        in normalized_content
+    )
+    assert "Never translate “write after Chapter A” into" in normalized_content
+    assert "Chapter A is the target's previous Chapter" in normalized_content
+    assert "verify that the returned `before_chapter_id` and `after_chapter_id`" in (
+        normalized_content
+    )
+    assert "Do not proceed with a Session whose saved boundary differs" in normalized_content
+
+
+def test_writing_skill_prioritizes_causal_coherence_and_narrative_clarity() -> None:
+    skill_root = PLUGIN_ROOT / "skills" / "novel-writing"
+    content = (skill_root / "SKILL.md").read_text(encoding="utf-8")
+    normalized_content = " ".join(content.split())
+    metadata = (skill_root / "agents" / "openai.yaml").read_text(encoding="utf-8")
+
+    assert "## Governing writing standard" in content
+    assert "### Highest creative gate: narrative intelligibility" in content
+    assert (
+        "causal coherence and first-pass narrative clarity are the highest creative gate"
+        in normalized_content
+    )
+    assert "what is happening now" in normalized_content
+    assert (
+        "why each character, limited to what that character knows and wants" in normalized_content
+    )
+    assert "creates the next material condition" in normalized_content
+    assert (
+        "Style cannot compensate for an unclear event or a broken transition" in normalized_content
+    )
+    assert "mystery with missing causal information" in normalized_content
+
+    assert "### Project-specific voice" in content
+    assert "Writing Rules, Creative Brief, exact approved prose" in normalized_content
+    assert "generic “good literary prose” or generalized “human style”" in normalized_content
+    assert "author-approved Voice Contract from Writing Rules" in normalized_content
+    assert "$novel-bootstrap" in normalized_content
+
+    assert "### Draft from confirmed causality" in content
+    assert "confirmed plan's causal chain" in normalized_content
+    assert "structure, not merely the vocabulary, changed" in normalized_content
+    assert "Prefer familiar, precise wording when it carries the meaning" in normalized_content
+    assert "Give each paragraph one dominant reader-facing job" in normalized_content
+    assert "allocate space by narrative importance" in normalized_content
+    assert "thesis → elaboration → thematic-summary scaffolding" in normalized_content
+    assert "Do not impose a universal sentence-length limit" in normalized_content
+
+    assert "### Compact diagnostic tests" in content
+    for test_name in (
+        "**Causal link:**",
+        "**Knowledge and behavior:**",
+        "**First read:**",
+        "**POV and dialogue:**",
+        "**Rhetorical substitution:**",
+    ):
+        assert test_name in content
+
+    assert "### Ordered narrative review" in content
+    assert "A later strength cannot compensate for an earlier failure" in normalized_content
+    for review_name in (
+        "**Plan and continuity:**",
+        "**Causal coherence:**",
+        "**First-pass narrative clarity:**",
+        "**Human behavior and viewpoint:**",
+        "**Project-specific voice:**",
+        "**AI-pattern regression:**",
+    ):
+        assert review_name in content
+    assert "`confirmed chapter plan: <revision>`" in normalized_content
+    assert "`causal-coherence check: passed`" in normalized_content
+    assert "`causal-coherence check: failed`" in normalized_content
+    assert "`first-pass narrative-clarity check: passed`" in normalized_content
+    assert "`first-pass narrative-clarity check: failed`" in normalized_content
+    assert "`human-behavior plausibility check: passed`" in normalized_content
+    assert "`human-behavior plausibility check: failed`" in normalized_content
+    assert "`focal-hierarchy check: passed`" in normalized_content
+    assert "`focal-hierarchy check: failed`" in normalized_content
+    assert "`lexical-accessibility check: passed`" in normalized_content
+    assert "`lexical-accessibility check: failed`" in normalized_content
+
+    assert "### Reviewer restraint and AI-pattern review" in content
+    assert "diagnostic role, not a second prose generator" in normalized_content
+    assert "a generic pattern was merely exchanged for another" in normalized_content
+    assert "Judge AI-like prose by causality, viewpoint" in normalized_content
+    assert "`opening voice basis: established`" in normalized_content
+    assert "`opening voice basis: missing`" in normalized_content
+    assert "`authorial-prose integrity check: passed`" in normalized_content
+    assert "`authorial-prose integrity check: failed`" in normalized_content
+    assert "`AI-like prose regression check: passed`" in normalized_content
+    assert "`AI-like prose regression check: failed`" in normalized_content
+    assert "noisy external observation" in normalized_content
+    assert "never as the writing objective" in normalized_content
+
+    assert "author-visible causal Chapter plan" in metadata
+    assert "author confirms the aligned plan" in metadata
+    assert "causal coherence and first-pass narrative clarity" in metadata
+    assert "preserve project-specific voice" in metadata
+
+
+def test_writing_skill_confirms_plans_and_controls_chapter_scope() -> None:
+    skill_root = PLUGIN_ROOT / "skills" / "novel-writing"
+    content = (skill_root / "SKILL.md").read_text(encoding="utf-8")
+    normalized_content = " ".join(content.split())
+    metadata = (skill_root / "agents" / "openai.yaml").read_text(encoding="utf-8")
+    manifest = (PLUGIN_ROOT / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8")
+
+    assert "## Chapter plan and author confirmation" in content
+    assert "author-visible" in normalized_content
+    assert "discussion artifact, not manuscript, approved Intent, Canon" in normalized_content
+    assert "Do not create hidden subchapter or Scene cards" in normalized_content
+    assert (
+        "observed fact → interpretation or choice → result → next condition" in normalized_content
+    )
+    assert "Show the exact plan revision to the author" in normalized_content
+    assert "changes an approved Chapter turn, sequence, decisive choice" in normalized_content
+    assert "use `$novel-bootstrap` to prepare, inspect, approve, and apply an Intent Revision" in (
+        normalized_content
+    )
+    assert "Reacquire Creation Context after apply" in normalized_content
+    assert "explicit confirmation of the exact aligned plan revision opens prose drafting" in (
+        normalized_content
+    )
+    assert "does not approve an Intent Revision or Publication" in normalized_content
+    assert "stop, revise the plan" in normalized_content
+
+    assert "## Chapter scope" in content
+    assert "one complete reader-facing Chapter" in normalized_content
+    assert "no formal subchapter" in normalized_content
+    assert "approved Writing Rules and Current Outline" in normalized_content
+    assert "never install a universal word-count target" in normalized_content
+    assert "selected project's Chapter budget and counting convention" in normalized_content
+    assert "count the exact Draft" in normalized_content
+    assert "one continuous action unit and one explainable exit change" in normalized_content
+    assert "ending can move unchanged to another Chapter" in normalized_content
+    assert "Compression must preserve action, perception" in normalized_content
+    assert "not Application gates" in normalized_content
+
+    assert "route material outline changes through approved Intent Revision" in metadata
+    assert "draft only after the author confirms the aligned plan" in metadata
+    assert "complete Chapters" in manifest
+    assert "author-visible causal plan" in manifest
+    assert "causal coherence and first-pass narrative clarity" in manifest
+
+
+def test_writing_and_publish_skills_control_approved_chapter_revisions() -> None:
+    writing_root = PLUGIN_ROOT / "skills" / "novel-writing"
+    writing = " ".join((writing_root / "SKILL.md").read_text(encoding="utf-8").split())
+    writing_metadata = (writing_root / "agents" / "openai.yaml").read_text(encoding="utf-8")
+    publish_root = PLUGIN_ROOT / "skills" / "novel-publish"
+    publishing = " ".join((publish_root / "SKILL.md").read_text(encoding="utf-8").split())
+    publishing_metadata = (publish_root / "agents" / "openai.yaml").read_text(encoding="utf-8")
+
+    assert "`--revise-chapter-id`" in writing
+    assert "Do not pass StoryTime, Volume, insertion-boundary, POV, or location overrides" in (
+        writing
+    )
+    assert "`session revision-source --session-id <id>`" in writing
+    assert "ordinary history commands still cannot read the target or later prose" in writing
+    assert "`satisfied: true` also requires the exact `revision-source` read" in writing
+    assert "old formal prose → candidate prose, never `/dev/null` → candidate" in writing
+    assert "Chapter/Document/Volume IDs and Narrative Order remain unchanged" in writing
+    assert "recover exact history" in writing_metadata
+    assert "review the exact Draft" in writing_metadata
+
+    assert "`base_document_revision`" in publishing
+    assert "`mode=revise`" in publishing
+    assert "old formal manuscript → candidate manuscript Diff" in publishing
+    assert "Chapter Summary, Volume Summary, and Chapter Trace Diffs" in publishing
+    assert "Any third revision is a conflict" in publishing
+    assert "same-identity revised Chapter publication" in publishing_metadata
+
+
+def test_ready_review_confirms_exact_draft_before_derived_publication_work() -> None:
     writing_root = PLUGIN_ROOT / "skills" / "novel-writing"
     writing = " ".join((writing_root / "SKILL.md").read_text(encoding="utf-8").split())
     writing_metadata = (writing_root / "agents" / "openai.yaml").read_text(encoding="utf-8")
@@ -221,20 +435,38 @@ def test_ready_review_surfaces_publication_approval_in_the_same_turn() -> None:
         (PLUGIN_ROOT / "skills" / "novel-publish" / "SKILL.md").read_text(encoding="utf-8").split()
     )
 
-    assert "If it is `ready`" in writing
-    assert "draft-only or review-only" in writing
+    assert "## Exact Draft author confirmation" in writing
+    assert "`draft show --session-id <id> --draft-revision <revision>`" in writing
+    assert "Present the exact Draft revision, complete prose" in writing
+    assert "Stop and wait for the author's response" in writing
+    assert "Before this confirmation, do not call `draft entity-candidates`" in writing
+    assert "extract people, plot, places, or clues" in writing
+    assert "generate Chapter or Volume Summaries" in writing
+    assert "A new Draft revision always invalidates" in writing
+    assert "not an Application approval artifact" in writing
+    assert "Only after the author confirms the exact Review-`ready` Draft revision" in writing
+    assert writing.index("## Exact Draft author confirmation") < writing.index(
+        "## Entity resolution and Chapter Trace"
+    )
+    assert "After the author confirms the exact Review-`ready` Draft" in writing
     assert "same Codex turn with `$novel-publish`" in writing
     assert "call `publish prepare`, then `publish inspect`" in writing
     assert "exact `publication_id`, and exact `approval_digest`" in writing
-    assert "Do not end a normal Scene-writing turn with only" in writing
     assert "do not wait for a later “continue writing” request" in writing
     assert "Never call `publish approve` or `publish apply`" in writing
-    assert "immediate digest approval" in writing_metadata
+    assert "show the exact ready revision and wait for author confirmation" in writing_metadata
+    assert "prepare publication digest approval" in writing_metadata
 
-    assert "complete Prepare and Inspect in that same Codex turn" in publishing
+    assert "author's explicit confirmation of that same exact Review-`ready` Draft revision" in (
+        publishing
+    )
+    assert "Review `ready` alone does not authorize Entity resolution" in publishing
+    assert "complete deferred Entity resolution, Prepare, and Inspect in that same Codex turn" in (
+        publishing
+    )
     assert "do not defer the approval request" in publishing
     assert "cover every `draft entity-candidates` hit" in publishing
-    assert "--scene-trace <json-file>" in publishing
+    assert "--chapter-trace <json-file>" in publishing
     assert "Mention resolutions, new Entity assignments" in publishing
 
 
@@ -251,20 +483,31 @@ def test_bootstrap_project_guidance_captures_codex_boundaries() -> None:
     assert "approved manuscript prose as the primary source" in guidance
     assert "project root as the working directory" in guidance
     assert "project-local `candidates/`" in guidance
-    assert "immediately prepare and inspect its Publication" in guidance
-    assert "Exact Scene Read every `continuity_scene_ids`" in normalized_guidance
+    assert "first show the exact Draft revision and complete prose" in normalized_guidance
+    assert "Before confirmation, do not run `draft entity-candidates`" in normalized_guidance
+    assert "Any prose change creates a new Draft" in normalized_guidance
+    assert "Only for an author-confirmed exact Draft revision" in normalized_guidance
+    assert "After the author confirms the exact ready Draft" in normalized_guidance
+    assert "prepare and inspect its Publication in the same turn" in normalized_guidance
+    assert "Exact Chapter Read every `continuity_chapter_ids`" in normalized_guidance
     assert "`session continuity-status` is satisfied" in normalized_guidance
     assert "Earlier Codex context, another Session, or a sub-agent report" in normalized_guidance
     assert "continuity Review in the primary writing agent" in normalized_guidance
-    assert "`session context` returns `required_chapter_heading`" in normalized_guidance
-    assert "use that exact text as the first Draft line" in normalized_guidance
+    assert "exact `required_chapter_heading` returned by `session context`" in normalized_guidance
+    assert "as every Draft's first line" in normalized_guidance
     assert "`draft entity-candidates`" in normalized_guidance
     assert "`memory entity-line`" in normalized_guidance
     assert "no unresolved `ambiguous` Mention" in normalized_guidance
+    assert "`session revision-source`" in normalized_guidance
+    assert "normal continuity window must both be satisfied" in normalized_guidance
+    assert (
+        "keep its Chapter, Document, Volume, and Narrative Order identities" in normalized_guidance
+    )
+    assert "never create a duplicate Chapter" in normalized_guidance
     assert "Do not automatically merge Entity identities" in normalized_guidance
-    assert "Scene Trace and Entity resolution Diff" in normalized_guidance
+    assert "Chapter Trace and Entity resolution Diff" in normalized_guidance
     assert "`$novel-trace-backfill`" in normalized_guidance
-    assert "Backfill approved Scenes one at a time" in normalized_guidance
+    assert "Backfill approved Chapters one at a time" in normalized_guidance
 
 
 def test_trace_backfill_skill_keeps_maintenance_outside_writing_sessions() -> None:
@@ -276,7 +519,7 @@ def test_trace_backfill_skill_keeps_maintenance_outside_writing_sessions() -> No
         (PLUGIN_ROOT / "skills" / "novel-writing" / "SKILL.md").read_text(encoding="utf-8").split()
     )
 
-    assert "one Scene at a time in Narrative Order" in content
+    assert "one Chapter at a time in Narrative Order" in content
     assert "Never choose the first, unique, nearest, most recent, or fuzzy string hit" in content
     assert "Do not prepare while any Mention is `ambiguous`" in content
     assert "exact `backfill_id` and `approval_digest`" in content

@@ -14,32 +14,33 @@ from novel_application.errors import (
     ProjectNotBootstrappedError,
     PublicationRecoveryRequiredError,
     RevisionConflictError,
-    SceneNotFoundError,
     TraceBackfillRecoveryRequiredError,
+    VolumeNotFoundError,
     WorkflowStateError,
 )
 from novel_application.memory import NavigationMemoryService
 from novel_application.models import (
-    ChapterSceneItem,
-    ChapterSummaryItem,
+    ChapterTraceBackfillSource,
     EntityLine,
-    ExactSceneText,
-    SceneTraceBackfillSource,
+    ExactChapterText,
     SummarySearchHit,
+    VolumeChapterItem,
+    VolumeSummaryItem,
 )
 from novel_application.ports import (
     BootstrapRunStore,
     CanonLedgerStore,
+    ChapterTraceBackfillStore,
     IntentRevisionStore,
     IntentStore,
     ManuscriptPublicationStore,
+    ManuscriptStore,
     NavigationQueryPort,
     NavigationSourceStore,
     ProjectionStore,
     ProjectStore,
     ProjectWriteLock,
     PublicationStore,
-    SceneTraceBackfillStore,
     WritingRunStore,
 )
 from novel_application.queries import CanonQueryService
@@ -52,8 +53,17 @@ from novel_core import (
     BootstrapStatus,
     CanonLedgerEntry,
     Chapter,
+    ChapterEntityOccurrence,
+    ChapterLedgerRecord,
+    ChapterStatus,
     ChapterSummary,
-    ContinuitySceneStatus,
+    ChapterSummaryDependency,
+    ChapterTrace,
+    ChapterTraceBackfill,
+    ChapterTraceBackfillPlan,
+    ChapterTraceBackfillStatus,
+    ChapterTraceDraft,
+    ContinuityChapterStatus,
     ContinuityStatus,
     CreationContext,
     Document,
@@ -78,30 +88,22 @@ from novel_core import (
     RetrievedSource,
     Review,
     ReviewRecommendation,
-    Scene,
-    SceneEntityOccurrence,
-    SceneLedgerRecord,
-    SceneStatus,
-    SceneSummary,
-    SceneSummaryDependency,
-    SceneTrace,
-    SceneTraceBackfill,
-    SceneTraceBackfillPlan,
-    SceneTraceBackfillStatus,
-    SceneTraceDraft,
     SourceRefLedgerRecord,
     StoryTime,
     StoryTimeKind,
+    Volume,
+    VolumeSummary,
     WritingSession,
+    WritingSessionMode,
     WritingSessionStatus,
     approval_digest,
     chapter_heading,
-    chapter_summary_is_stale,
+    chapter_summary_digest,
+    chapter_trace_digest,
     intent_revision,
     manuscript_revision,
     replay_ledger,
-    scene_summary_digest,
-    scene_trace_digest,
+    volume_summary_is_stale,
 )
 from novel_core.canon.ledger import LedgerRecord
 
@@ -438,12 +440,15 @@ class WritingSessionService:
         self,
         *,
         author_goal: str,
-        target_story_time: StoryTime,
-        chapter_id: UUID | None,
+        target_story_time: StoryTime | None,
+        volume_id: UUID | None,
+        new_volume_number: int | None,
+        new_volume_title: str | None,
         new_chapter_number: int | None,
         new_chapter_title: str | None,
-        before_scene_id: UUID | None,
-        after_scene_id: UUID | None,
+        before_chapter_id: UUID | None,
+        after_chapter_id: UUID | None,
+        revise_chapter_id: UUID | None = None,
         creative_constraints: tuple[str, ...] = (),
         pov_entity_id: UUID | None = None,
         location_entity_id: UUID | None = None,
@@ -454,45 +459,103 @@ class WritingSessionService:
         if content is None:
             raise WorkflowStateError("ready Project has no Intent Canon")
         snapshot = replay_ledger(self._ledger.read_entries())
-        chapter = self._resolve_target_chapter(
-            chapter_id=chapter_id,
-            new_chapter_number=new_chapter_number,
-            new_chapter_title=new_chapter_title,
+        mode = (
+            WritingSessionMode.REVISE
+            if revise_chapter_id is not None
+            else WritingSessionMode.CREATE
         )
-        narrative_order = self._target_order(
-            before_scene_id=before_scene_id,
-            after_scene_id=after_scene_id,
-            target_chapter_id=chapter.chapter_id if chapter is not None else chapter_id,
-        )
-        target_chapter_id = chapter.chapter_id if chapter is not None else self._new_id()
-        target_scene_id = self._new_id()
+        if mode is WritingSessionMode.REVISE:
+            if any(
+                value is not None
+                for value in (
+                    volume_id,
+                    new_volume_number,
+                    new_volume_title,
+                    new_chapter_number,
+                    new_chapter_title,
+                    before_chapter_id,
+                    after_chapter_id,
+                    target_story_time,
+                    pov_entity_id,
+                    location_entity_id,
+                )
+            ):
+                raise ValueError(
+                    "Chapter revision uses the approved target position and metadata; "
+                    "pass only --revise-chapter-id"
+                )
+            assert revise_chapter_id is not None
+            volume, target_chapter, target_document, before_chapter_id, after_chapter_id = (
+                self._revision_target(revise_chapter_id, snapshot)
+            )
+            target_chapter_id = target_chapter.chapter_id
+            target_document_id = target_document.document_id
+            target_document_path = target_document.relative_path
+            target_volume_id = volume.volume_id
+            narrative_order = target_chapter.narrative_order
+            target_story_time = target_chapter.story_time
+            pov_entity_id = target_chapter.pov_entity_id
+            location_entity_id = target_chapter.location_entity_id
+            base_document_revision = target_document.revision
+            target_chapter_number = target_chapter.chapter_number
+            target_chapter_title = target_chapter.title
+            required_heading = chapter_heading(
+                language=manifest.language,
+                chapter_number=target_chapter_number,
+                title=target_chapter_title,
+            )
+        else:
+            if target_story_time is None:
+                raise ValueError("new Chapter requires --story-time")
+            if new_chapter_number is None or new_chapter_title is None:
+                raise ValueError("new Chapter requires number and title")
+            if any(chapter.chapter_number == new_chapter_number for chapter in snapshot.chapters):
+                raise RevisionConflictError(f"Chapter number already exists: {new_chapter_number}")
+            volume = self._resolve_target_volume(
+                volume_id=volume_id,
+                new_volume_number=new_volume_number,
+                new_volume_title=new_volume_title,
+            )
+            narrative_order = self._target_order(
+                before_chapter_id=before_chapter_id,
+                after_chapter_id=after_chapter_id,
+                target_volume_id=volume.volume_id if volume is not None else volume_id,
+            )
+            target_volume_id = volume.volume_id if volume is not None else self._new_id()
+            target_chapter_id = self._new_id()
+            target_document_id = self._new_id()
+            target_document_path = f"manuscript/{target_chapter_id}.md"
+            base_document_revision = None
+            target_chapter_number = new_chapter_number
+            target_chapter_title = new_chapter_title
+            required_heading = chapter_heading(
+                language=manifest.language,
+                chapter_number=target_chapter_number,
+                title=target_chapter_title,
+            )
         session = WritingSession(
             writing_session_id=self._new_id(),
             project_id=manifest.project_id,
-            target_scene_id=target_scene_id,
-            target_document_id=self._new_id(),
-            target_document_path=f"manuscript/{target_scene_id}.md",
+            mode=mode,
             target_chapter_id=target_chapter_id,
-            target_chapter_number=(
-                chapter.chapter_number if chapter is not None else int(new_chapter_number)
+            target_document_id=target_document_id,
+            target_document_path=target_document_path,
+            target_chapter_number=target_chapter_number,
+            target_chapter_title=target_chapter_title,
+            target_volume_id=target_volume_id,
+            target_volume_number=(
+                volume.volume_number if volume is not None else int(new_volume_number)
             ),
-            target_chapter_title=(chapter.title if chapter is not None else str(new_chapter_title)),
-            required_chapter_heading=(
-                None
-                if chapter is not None
-                else chapter_heading(
-                    language=manifest.language,
-                    chapter_number=int(new_chapter_number),
-                    title=str(new_chapter_title),
-                )
-            ),
+            target_volume_title=(volume.title if volume is not None else str(new_volume_title)),
+            required_chapter_heading=required_heading,
             target_narrative_order=narrative_order,
             target_story_time=target_story_time,
             pov_entity_id=pov_entity_id,
             location_entity_id=location_entity_id,
-            before_scene_id=before_scene_id,
-            after_scene_id=after_scene_id,
+            before_chapter_id=before_chapter_id,
+            after_chapter_id=after_chapter_id,
             base_canon_revision=snapshot.revision,
+            base_document_revision=base_document_revision,
             base_intent_revision=intent_revision(content),
             author_goal=author_goal,
             creative_constraints=creative_constraints,
@@ -501,6 +564,42 @@ class WritingSessionService:
         )
         self._runs.create_session(session)
         return session
+
+    def _revision_target(
+        self,
+        chapter_id: UUID,
+        snapshot,
+    ) -> tuple[Volume, Chapter, Document, UUID | None, UUID | None]:
+        chapter = self._canon.get_chapter(chapter_id)
+        if chapter is None:
+            raise ChapterNotFoundError(f"revision target Chapter does not exist: {chapter_id}")
+        if chapter.status is not ChapterStatus.APPROVED or chapter.volume_id is None:
+            raise WorkflowStateError("revision target must be an approved Volume Chapter")
+        volume = self._navigation.get_volume(chapter.volume_id)
+        if volume is None or chapter.chapter_id not in volume.chapter_ids:
+            raise WorkflowStateError("revision target is not in its current Volume structure")
+        document = self._canon.get_document(chapter.source_document_id)
+        if document is None or document.document_kind is not DocumentKind.MANUSCRIPT:
+            raise WorkflowStateError("revision target has no approved manuscript Document")
+        if document.revision != chapter.revision:
+            raise RevisionConflictError("revision target Chapter and Document revisions differ")
+        document_chapters = tuple(
+            item for item in snapshot.chapters if item.source_document_id == document.document_id
+        )
+        if document_chapters != (chapter,):
+            raise WorkflowStateError(
+                "Chapter revision requires one Chapter per manuscript Document"
+            )
+
+        ordered = tuple(sorted(snapshot.chapters, key=lambda item: item.narrative_order))
+        target_index = next(
+            index for index, item in enumerate(ordered) if item.chapter_id == chapter.chapter_id
+        )
+        before_chapter_id = ordered[target_index - 1].chapter_id if target_index else None
+        after_chapter_id = (
+            ordered[target_index + 1].chapter_id if target_index + 1 < len(ordered) else None
+        )
+        return volume, chapter, document, before_chapter_id, after_chapter_id
 
     def show(self, writing_session_id: UUID) -> WritingSession:
         return self._runs.load_session(writing_session_id)
@@ -512,38 +611,48 @@ class WritingSessionService:
             raise WorkflowStateError("Project has no formal Intent Canon")
         if intent_revision(content) != session.base_intent_revision:
             raise RevisionConflictError("formal Intent changed after Session start")
-        chapter = self._navigation.get_chapter(session.target_chapter_id)
+        volume = self._navigation.get_volume(session.target_volume_id)
         previous_summary = None
-        if session.before_scene_id is not None:
-            projected = self._navigation.get_scene_summary(session.before_scene_id)
+        if session.before_chapter_id is not None:
+            projected = self._navigation.get_chapter_summary(session.before_chapter_id)
             previous_summary = projected[0] if projected is not None else None
-        continuity_scenes = self._continuity_scenes(session)
+        continuity_chapters = self._continuity_chapters(session)
         return CreationContext(
             project_id=session.project_id,
             writing_session_id=session.writing_session_id,
+            mode=session.mode,
             author_goal=session.author_goal,
             creative_constraints=session.creative_constraints,
-            target_scene_id=session.target_scene_id,
             target_chapter_id=session.target_chapter_id,
+            target_chapter_number=session.target_chapter_number,
+            target_chapter_title=session.target_chapter_title,
+            target_volume_id=session.target_volume_id,
             target_narrative_order=session.target_narrative_order,
             required_chapter_heading=session.required_chapter_heading,
-            before_scene_id=session.before_scene_id,
-            after_scene_id=session.after_scene_id,
+            before_chapter_id=session.before_chapter_id,
+            after_chapter_id=session.after_chapter_id,
             base_canon_revision=session.base_canon_revision,
+            base_document_revision=session.base_document_revision,
             base_intent_revision=session.base_intent_revision,
             intent=content,
-            chapter=chapter,
-            previous_scene_summary=previous_summary,
-            previous_scene_text_available=session.before_scene_id is not None,
-            continuity_chapter_id=(continuity_scenes[0].chapter_id if continuity_scenes else None),
-            continuity_scene_ids=tuple(scene.scene_id for scene in continuity_scenes),
+            volume=volume,
+            previous_chapter_summary=previous_summary,
+            previous_chapter_text_available=session.before_chapter_id is not None,
+            continuity_volume_id=(
+                continuity_chapters[0].volume_id if continuity_chapters else None
+            ),
+            continuity_chapter_ids=tuple(chapter.chapter_id for chapter in continuity_chapters),
+            revision_source_chapter_id=(
+                session.target_chapter_id if session.mode is WritingSessionMode.REVISE else None
+            ),
             important_entities=self._canon.list_entities(),
             query_capabilities=(
                 "session continuity-status",
+                "session revision-source",
+                "memory volumes",
                 "memory chapters",
-                "memory scenes",
                 "memory search-summaries",
-                "memory read-scene",
+                "memory read-chapter",
                 "memory entity-line",
                 "draft entity-candidates",
                 "resolve entity",
@@ -554,60 +663,87 @@ class WritingSessionService:
 
     def continuity_status(self, writing_session_id: UUID) -> ContinuityStatus:
         session = self._runs.load_session(writing_session_id)
-        continuity_scenes = self._continuity_scenes(session)
+        continuity_chapters = self._continuity_chapters(session)
         retrieved = self._runs.list_retrieved_sources(writing_session_id)
-        scene_statuses = tuple(
-            ContinuitySceneStatus(
-                chapter_id=scene.chapter_id,
-                scene_id=scene.scene_id,
-                document_id=scene.source_document_id,
-                document_revision=scene.revision,
-                narrative_order=scene.narrative_order,
+        chapter_statuses = tuple(
+            ContinuityChapterStatus(
+                volume_id=chapter.volume_id,
+                chapter_id=chapter.chapter_id,
+                document_id=chapter.source_document_id,
+                document_revision=chapter.revision,
+                narrative_order=chapter.narrative_order,
                 retrieved_source_ids=tuple(
                     source.retrieved_source_id
                     for source in retrieved
-                    if source.retrieval_kind is RetrievalKind.EXACT_SCENE
-                    and source.chapter_id == scene.chapter_id
-                    and source.scene_id == scene.scene_id
-                    and source.document_id == scene.source_document_id
-                    and source.document_revision == scene.revision
+                    if source.retrieval_kind is RetrievalKind.EXACT_CHAPTER
+                    and source.volume_id == chapter.volume_id
+                    and source.chapter_id == chapter.chapter_id
+                    and source.document_id == chapter.source_document_id
+                    and source.document_revision == chapter.revision
                 ),
                 satisfied=any(
-                    source.retrieval_kind is RetrievalKind.EXACT_SCENE
-                    and source.chapter_id == scene.chapter_id
-                    and source.scene_id == scene.scene_id
-                    and source.document_id == scene.source_document_id
-                    and source.document_revision == scene.revision
+                    source.retrieval_kind is RetrievalKind.EXACT_CHAPTER
+                    and source.volume_id == chapter.volume_id
+                    and source.chapter_id == chapter.chapter_id
+                    and source.document_id == chapter.source_document_id
+                    and source.document_revision == chapter.revision
                     for source in retrieved
                 ),
             )
-            for scene in continuity_scenes
+            for chapter in continuity_chapters
         )
-        missing_scene_ids = tuple(scene.scene_id for scene in scene_statuses if not scene.satisfied)
+        missing_chapter_ids = tuple(
+            chapter.chapter_id for chapter in chapter_statuses if not chapter.satisfied
+        )
+        revision_source_ids = tuple(
+            source.retrieved_source_id
+            for source in retrieved
+            if session.mode is WritingSessionMode.REVISE
+            and source.retrieval_kind is RetrievalKind.EXACT_CHAPTER
+            and source.volume_id == session.target_volume_id
+            and source.chapter_id == session.target_chapter_id
+            and source.document_id == session.target_document_id
+            and source.document_revision == session.base_document_revision
+        )
+        revision_source_satisfied = session.mode is WritingSessionMode.CREATE or bool(
+            revision_source_ids
+        )
         return ContinuityStatus(
             writing_session_id=writing_session_id,
-            continuity_chapter_id=(continuity_scenes[0].chapter_id if continuity_scenes else None),
-            required_scenes=scene_statuses,
-            missing_scene_ids=missing_scene_ids,
-            satisfied=not missing_scene_ids,
+            continuity_volume_id=(
+                continuity_chapters[0].volume_id if continuity_chapters else None
+            ),
+            required_chapters=chapter_statuses,
+            missing_chapter_ids=missing_chapter_ids,
+            revision_source_chapter_id=(
+                session.target_chapter_id if session.mode is WritingSessionMode.REVISE else None
+            ),
+            revision_source_retrieved_source_ids=revision_source_ids,
+            revision_source_satisfied=revision_source_satisfied,
+            satisfied=not missing_chapter_ids and revision_source_satisfied,
         )
 
     def require_continuity(self, writing_session_id: UUID) -> ContinuityStatus:
         status = self.continuity_status(writing_session_id)
         if not status.satisfied:
-            missing = ", ".join(str(scene_id) for scene_id in status.missing_scene_ids)
-            raise WorkflowStateError("Draft requires exact reads for continuity Scenes: " + missing)
+            requirements = [
+                *(f"continuity Chapter {chapter_id}" for chapter_id in status.missing_chapter_ids),
+                *(
+                    (f"revision source Chapter {status.revision_source_chapter_id}",)
+                    if not status.revision_source_satisfied
+                    else ()
+                ),
+            ]
+            raise WorkflowStateError("Draft requires exact reads for " + ", ".join(requirements))
         return status
 
     def require_draft_format(self, writing_session_id: UUID, text: str) -> None:
         session = self._runs.load_session(writing_session_id)
         required = session.required_chapter_heading
-        if required is None:
-            return
         lines = text.splitlines()
         first_line = lines[0] if lines else ""
         if first_line != required:
-            raise WorkflowStateError("new Chapter Draft must begin with exact heading: " + required)
+            raise WorkflowStateError("Chapter Draft must begin with exact heading: " + required)
 
     def close(self, writing_session_id: UUID) -> WritingSession:
         session = self._runs.load_session(writing_session_id)
@@ -622,115 +758,106 @@ class WritingSessionService:
         self._runs.replace_session(closed)
         return closed
 
-    def _continuity_scenes(self, session: WritingSession) -> tuple[Scene, ...]:
-        if session.before_scene_id is None:
+    def _continuity_chapters(self, session: WritingSession) -> tuple[Chapter, ...]:
+        if session.before_chapter_id is None:
             return ()
-        previous_scene = self._canon.get_scene(session.before_scene_id)
-        if previous_scene is None:
-            raise SceneNotFoundError(f"before Scene does not exist: {session.before_scene_id}")
-        if previous_scene.chapter_id is None:
-            raise WorkflowStateError("before Scene is not assigned to a Chapter")
-        scenes = tuple(
-            sorted(
-                (
-                    scene
-                    for scene, _scene_number in self._navigation.chapter_scenes(
-                        previous_scene.chapter_id
-                    )
-                    if scene.status is SceneStatus.APPROVED
-                    and scene.narrative_order < session.target_narrative_order
-                ),
-                key=lambda scene: scene.narrative_order,
+        previous_chapter = self._canon.get_chapter(session.before_chapter_id)
+        if previous_chapter is None:
+            raise ChapterNotFoundError(
+                f"before Chapter does not exist: {session.before_chapter_id}"
             )
-        )
-        if previous_scene.scene_id not in {scene.scene_id for scene in scenes}:
+        if previous_chapter.volume_id is None:
+            raise WorkflowStateError("before Chapter is not assigned to a Volume")
+        if (
+            previous_chapter.status is not ChapterStatus.APPROVED
+            or previous_chapter.narrative_order >= session.target_narrative_order
+        ):
             raise WorkflowStateError(
-                "before Scene is not an approved Scene before the Session boundary"
+                "before Chapter is not an approved Chapter before the Session boundary"
             )
-        return scenes
+        return (previous_chapter,)
 
-    def _resolve_target_chapter(
+    def _resolve_target_volume(
         self,
         *,
-        chapter_id: UUID | None,
-        new_chapter_number: int | None,
-        new_chapter_title: str | None,
-    ) -> Chapter | None:
-        new_values = new_chapter_number is not None or new_chapter_title is not None
-        if chapter_id is not None and new_values:
-            raise ValueError("choose an existing Chapter or a new Chapter, not both")
-        if chapter_id is not None:
-            chapter = self._navigation.get_chapter(chapter_id)
-            if chapter is None:
-                raise ChapterNotFoundError(f"Chapter does not exist: {chapter_id}")
-            return chapter
-        if new_chapter_number is None or new_chapter_title is None:
-            raise ValueError("new Chapter requires number and title")
+        volume_id: UUID | None,
+        new_volume_number: int | None,
+        new_volume_title: str | None,
+    ) -> Volume | None:
+        new_values = new_volume_number is not None or new_volume_title is not None
+        if volume_id is not None and new_values:
+            raise ValueError("choose an existing Volume or a new Volume, not both")
+        if volume_id is not None:
+            volume = self._navigation.get_volume(volume_id)
+            if volume is None:
+                raise VolumeNotFoundError(f"Volume does not exist: {volume_id}")
+            return volume
+        if new_volume_number is None or new_volume_title is None:
+            raise ValueError("new Volume requires number and title")
         if any(
-            chapter.chapter_number == new_chapter_number
-            for chapter in self._navigation.list_chapters()
+            volume.volume_number == new_volume_number for volume in self._navigation.list_volumes()
         ):
-            raise RevisionConflictError(f"Chapter number already exists: {new_chapter_number}")
+            raise RevisionConflictError(f"Volume number already exists: {new_volume_number}")
         return None
 
     def _target_order(
         self,
         *,
-        before_scene_id: UUID | None,
-        after_scene_id: UUID | None,
-        target_chapter_id: UUID | None,
+        before_chapter_id: UUID | None,
+        after_chapter_id: UUID | None,
+        target_volume_id: UUID | None,
     ) -> int:
-        scenes = sorted(
+        chapters = sorted(
             (
-                scene
-                for chapter in self._navigation.list_chapters()
-                for scene, _number in self._navigation.chapter_scenes(chapter.chapter_id)
+                chapter
+                for volume in self._navigation.list_volumes()
+                for chapter, _number in self._navigation.volume_chapters(volume.volume_id)
             ),
-            key=lambda scene: scene.narrative_order,
+            key=lambda chapter: chapter.narrative_order,
         )
-        by_id = {scene.scene_id: scene for scene in scenes}
-        before = by_id.get(before_scene_id) if before_scene_id is not None else None
-        after = by_id.get(after_scene_id) if after_scene_id is not None else None
-        if before_scene_id is not None and before is None:
-            raise SceneNotFoundError(f"before Scene does not exist: {before_scene_id}")
-        if after_scene_id is not None and after is None:
-            raise SceneNotFoundError(f"after Scene does not exist: {after_scene_id}")
+        by_id = {chapter.chapter_id: chapter for chapter in chapters}
+        before = by_id.get(before_chapter_id) if before_chapter_id is not None else None
+        after = by_id.get(after_chapter_id) if after_chapter_id is not None else None
+        if before_chapter_id is not None and before is None:
+            raise ChapterNotFoundError(f"before Chapter does not exist: {before_chapter_id}")
+        if after_chapter_id is not None and after is None:
+            raise ChapterNotFoundError(f"after Chapter does not exist: {after_chapter_id}")
         if before is None and after is None:
-            if scenes:
-                raise WorkflowStateError("non-empty novel requires an explicit Scene boundary")
+            if chapters:
+                raise WorkflowStateError("non-empty novel requires an explicit Chapter boundary")
             return NARRATIVE_ORDER_STEP
         if before is not None and after is not None:
             if before.narrative_order >= after.narrative_order:
-                raise WorkflowStateError("before Scene must precede after Scene")
+                raise WorkflowStateError("before Chapter must precede after Chapter")
             between = [
-                scene
-                for scene in scenes
-                if before.narrative_order < scene.narrative_order < after.narrative_order
+                chapter
+                for chapter in chapters
+                if before.narrative_order < chapter.narrative_order < after.narrative_order
             ]
             if between:
                 raise WorkflowStateError("Session boundaries must be adjacent")
-            if target_chapter_id is not None and (
-                before.chapter_id != target_chapter_id or after.chapter_id != target_chapter_id
+            if target_volume_id is not None and (
+                before.volume_id != target_volume_id or after.volume_id != target_volume_id
             ):
-                raise WorkflowStateError("insertion boundaries must belong to target Chapter")
+                raise WorkflowStateError("insertion boundaries must belong to target Volume")
             gap = after.narrative_order - before.narrative_order
             if gap <= 1:
-                raise WorkflowStateError("no stable Narrative Order slot remains between Scenes")
+                raise WorkflowStateError("no stable Narrative Order slot remains between Chapters")
             return before.narrative_order + gap // 2
         if before is not None:
-            if scenes[-1].scene_id != before.scene_id:
+            if chapters[-1].chapter_id != before.chapter_id:
                 raise WorkflowStateError(
-                    "an omitted after boundary means append after the last Scene"
+                    "an omitted after boundary means append after the last Chapter"
                 )
             return before.narrative_order + NARRATIVE_ORDER_STEP
         assert after is not None
-        if scenes[0].scene_id != after.scene_id:
+        if chapters[0].chapter_id != after.chapter_id:
             raise WorkflowStateError(
-                "an omitted before boundary means insert before the first Scene"
+                "an omitted before boundary means insert before the first Chapter"
             )
         if after.narrative_order <= 1:
             raise WorkflowStateError(
-                "no stable Narrative Order slot remains before the first Scene"
+                "no stable Narrative Order slot remains before the first Chapter"
             )
         return max(1, after.narrative_order // 2)
 
@@ -753,17 +880,17 @@ class SessionNavigationService:
         self._new_id = new_id
         self._clock = clock
 
-    def chapters(self, session_id: UUID) -> tuple[ChapterSummaryItem, ...]:
+    def volumes(self, session_id: UUID) -> tuple[VolumeSummaryItem, ...]:
         session = self._open(session_id)
         items = tuple(
             item
-            for item in self._memory.chapters()
+            for item in self._memory.volumes()
             if item.summary is None
             or max(
                 (
-                    scene.narrative_order
-                    for scene_item in self._memory.scenes(item.chapter.chapter_id)
-                    for scene in (scene_item.scene,)
+                    chapter.narrative_order
+                    for chapter_item in self._memory.chapters(item.volume.volume_id)
+                    for chapter in (chapter_item.chapter,)
                 ),
                 default=0,
             )
@@ -773,29 +900,29 @@ class SessionNavigationService:
             if item.summary is not None:
                 self._record(
                     session,
-                    RetrievalKind.CHAPTER_SUMMARY,
-                    chapter_id=item.chapter.chapter_id,
-                    reason="Session Chapter navigation",
+                    RetrievalKind.VOLUME_SUMMARY,
+                    volume_id=item.volume.volume_id,
+                    reason="Session Volume navigation",
                 )
         return items
 
-    def scenes(self, session_id: UUID, chapter_id: UUID) -> tuple[ChapterSceneItem, ...]:
+    def chapters(self, session_id: UUID, volume_id: UUID) -> tuple[VolumeChapterItem, ...]:
         session = self._open(session_id)
         items = tuple(
             item
-            for item in self._memory.scenes(chapter_id)
-            if item.scene.narrative_order < session.target_narrative_order
+            for item in self._memory.chapters(volume_id)
+            if item.chapter.narrative_order < session.target_narrative_order
         )
         for item in items:
             if item.summary is not None:
                 self._record(
                     session,
-                    RetrievalKind.SCENE_SUMMARY,
-                    chapter_id=chapter_id,
-                    scene_id=item.scene.scene_id,
-                    document_id=item.scene.source_document_id,
-                    document_revision=item.scene.revision,
-                    reason="Session Scene navigation",
+                    RetrievalKind.CHAPTER_SUMMARY,
+                    volume_id=volume_id,
+                    chapter_id=item.chapter.chapter_id,
+                    document_id=item.chapter.source_document_id,
+                    document_revision=item.chapter.revision,
+                    reason="Session Chapter navigation",
                 )
         return items
 
@@ -815,40 +942,66 @@ class SessionNavigationService:
             limit=limit,
         )
         for hit in hits:
-            if isinstance(hit.summary, ChapterSummary):
+            if isinstance(hit.summary, VolumeSummary):
                 self._record(
                     session,
-                    RetrievalKind.CHAPTER_SUMMARY,
-                    chapter_id=hit.summary.chapter_id,
+                    RetrievalKind.VOLUME_SUMMARY,
+                    volume_id=hit.summary.volume_id,
                     reason=hit.match_reason,
                 )
             else:
                 self._record(
                     session,
-                    RetrievalKind.SCENE_SUMMARY,
+                    RetrievalKind.CHAPTER_SUMMARY,
+                    volume_id=hit.summary.volume_id,
                     chapter_id=hit.summary.chapter_id,
-                    scene_id=hit.summary.scene_id,
                     document_id=hit.summary.source_document_id,
                     document_revision=hit.summary.source_revision,
                     reason=hit.match_reason,
                 )
         return hits
 
-    def read(self, session_id: UUID, *, chapter_id: UUID, scene_id: UUID) -> ExactSceneText:
+    def read(self, session_id: UUID, *, volume_id: UUID, chapter_id: UUID) -> ExactChapterText:
         session = self._open(session_id)
-        result = self._memory.read_scene_before_order(
+        result = self._memory.read_chapter_before_order(
+            volume_id=volume_id,
             chapter_id=chapter_id,
-            scene_id=scene_id,
             before_narrative_order=session.target_narrative_order,
         )
         self._record(
             session,
-            RetrievalKind.EXACT_SCENE,
+            RetrievalKind.EXACT_CHAPTER,
+            volume_id=volume_id,
             chapter_id=chapter_id,
-            scene_id=scene_id,
             document_id=result.document.document_id,
             document_revision=result.document.revision,
-            reason="Exact approved Scene read for Writing Session",
+            reason="Exact approved Chapter read for Writing Session",
+        )
+        return result
+
+    def revision_source(self, session_id: UUID) -> ExactChapterText:
+        session = self._open(session_id)
+        if session.mode is not WritingSessionMode.REVISE:
+            raise WorkflowStateError("only a Chapter-revision Session has a revision source")
+        result = self._memory.read_approved_chapter(
+            volume_id=session.target_volume_id,
+            chapter_id=session.target_chapter_id,
+        )
+        if (
+            result.document.document_id != session.target_document_id
+            or result.document.relative_path != session.target_document_path
+            or result.document.revision != session.base_document_revision
+            or result.chapter.revision != session.base_document_revision
+        ):
+            raise RevisionConflictError("revision source changed after Writing Session start")
+        self._record(
+            session,
+            RetrievalKind.EXACT_CHAPTER,
+            volume_id=result.volume.volume_id,
+            chapter_id=result.chapter.chapter_id,
+            document_id=result.document.document_id,
+            document_revision=result.document.revision,
+            reason="Exact approved revision source read for Writing Session",
         )
         return result
 
@@ -861,26 +1014,26 @@ class SessionNavigationService:
         for item in result.occurrences:
             self._record(
                 session,
-                RetrievalKind.SCENE_TRACE,
+                RetrievalKind.CHAPTER_TRACE,
+                volume_id=item.volume.volume_id,
                 chapter_id=item.chapter.chapter_id,
-                scene_id=item.scene.scene_id,
-                document_id=item.scene_trace.source_document_id,
-                document_revision=item.scene_trace.source_revision,
+                document_id=item.chapter_trace.source_document_id,
+                document_revision=item.chapter_trace.source_revision,
                 reason=f"Entity occurrence line for {entity_id}",
             )
         return result
 
-    def validate_canon_scene_ids(
+    def validate_canon_chapter_ids(
         self,
         session_id: UUID,
-        scene_ids: tuple[UUID, ...],
+        chapter_ids: tuple[UUID, ...],
     ) -> WritingSession:
         session = self._open(session_id)
-        for scene_id in scene_ids:
-            scene = self._canon.get_scene(scene_id)
-            if scene is None:
-                raise SceneNotFoundError(f"Canon query Scene does not exist: {scene_id}")
-            if scene.narrative_order >= session.target_narrative_order:
+        for chapter_id in chapter_ids:
+            chapter = self._canon.get_chapter(chapter_id)
+            if chapter is None:
+                raise ChapterNotFoundError(f"Canon query Chapter does not exist: {chapter_id}")
+            if chapter.narrative_order >= session.target_narrative_order:
                 raise WorkflowStateError(
                     "Session Canon query cannot cross its Narrative Order boundary"
                 )
@@ -907,7 +1060,7 @@ class SessionNavigationService:
             self._record(
                 session,
                 RetrievalKind.CANON_QUERY,
-                scene_id=source_ref.scene_id,
+                chapter_id=source_ref.chapter_id,
                 document_id=source_ref.document_id,
                 document_revision=source_ref.document_revision,
                 reason=reason,
@@ -927,8 +1080,8 @@ class SessionNavigationService:
         kind: RetrievalKind,
         *,
         reason: str,
+        volume_id: UUID | None = None,
         chapter_id: UUID | None = None,
-        scene_id: UUID | None = None,
         document_id: UUID | None = None,
         document_revision: str | None = None,
     ) -> RetrievedSource:
@@ -936,8 +1089,8 @@ class SessionNavigationService:
             retrieved_source_id=self._new_id(),
             writing_session_id=session.writing_session_id,
             retrieval_kind=kind,
+            volume_id=volume_id,
             chapter_id=chapter_id,
-            scene_id=scene_id,
             document_id=document_id,
             document_revision=document_revision,
             retrieval_reason=reason,
@@ -948,7 +1101,7 @@ class SessionNavigationService:
 
 
 class EntityResolutionService:
-    """Recall visible exact-name candidates and materialize reviewed Scene Traces."""
+    """Recall visible exact-name candidates and materialize reviewed Chapter Traces."""
 
     def __init__(
         self,
@@ -997,12 +1150,12 @@ class EntityResolutionService:
         session: WritingSession,
         draft_revision: str,
         manuscript: bytes,
-        draft: SceneTraceDraft,
+        draft: ChapterTraceDraft,
+        volume: Volume,
         chapter: Chapter,
-        scene: Scene,
         document: Document,
         new_id: IdFactory,
-    ) -> tuple[SceneTrace, tuple[Entity, ...]]:
+    ) -> tuple[ChapterTrace, tuple[Entity, ...]]:
         entries = self._ledger.read_entries()
         snapshot = replay_ledger(entries)
         if snapshot.revision != session.base_canon_revision:
@@ -1012,8 +1165,8 @@ class EntityResolutionService:
             source_revision=draft_revision,
             manuscript=manuscript,
             draft=draft,
+            volume=volume,
             chapter=chapter,
-            scene=scene,
             document=document,
             snapshot=snapshot,
             names=names,
@@ -1022,7 +1175,7 @@ class EntityResolutionService:
             new_id=new_id,
         )
 
-    def approved_scene_candidates(
+    def approved_chapter_candidates(
         self,
         text: str,
         *,
@@ -1038,22 +1191,22 @@ class EntityResolutionService:
         base_canon_revision: str,
         source_revision: str,
         manuscript: bytes,
-        draft: SceneTraceDraft,
+        draft: ChapterTraceDraft,
+        volume: Volume,
         chapter: Chapter,
-        scene: Scene,
         document: Document,
         new_id: IdFactory,
-    ) -> tuple[SceneTrace, tuple[Entity, ...]]:
+    ) -> tuple[ChapterTrace, tuple[Entity, ...]]:
         snapshot = replay_ledger(self._ledger.read_entries())
         if snapshot.revision != base_canon_revision:
             raise RevisionConflictError("Canon changed after Trace Backfill source read")
-        names, entities = self._all_identity_names(snapshot, scene.story_time)
+        names, entities = self._all_identity_names(snapshot, chapter.story_time)
         return self._materialize(
             source_revision=source_revision,
             manuscript=manuscript,
             draft=draft,
+            volume=volume,
             chapter=chapter,
-            scene=scene,
             document=document,
             snapshot=snapshot,
             names=names,
@@ -1067,16 +1220,16 @@ class EntityResolutionService:
         *,
         source_revision: str,
         manuscript: bytes,
-        draft: SceneTraceDraft,
+        draft: ChapterTraceDraft,
+        volume: Volume,
         chapter: Chapter,
-        scene: Scene,
         document: Document,
         snapshot,
         names: dict[str, tuple[UUID, ...]],
         available_entity_ids: set[UUID],
         unknown_entity_label: str,
         new_id: IdFactory,
-    ) -> tuple[SceneTrace, tuple[Entity, ...]]:
+    ) -> tuple[ChapterTrace, tuple[Entity, ...]]:
         text = manuscript.decode("utf-8")
         exact_matches = self._exact_matches(text, names)
         exact_by_span = {
@@ -1089,7 +1242,7 @@ class EntityResolutionService:
             mention = draft_by_span.get(key)
             if mention is None:
                 raise WorkflowStateError(
-                    "Scene Trace Draft does not cover exact Entity candidate at "
+                    "Chapter Trace Draft does not cover exact Entity candidate at "
                     f"{match.start_offset}:{match.end_offset} ({match.surface_text})"
                 )
             missing_candidates = set(match.candidate_entity_ids) - set(
@@ -1097,25 +1250,25 @@ class EntityResolutionService:
             )
             if missing_candidates:
                 raise WorkflowStateError(
-                    "Scene Trace Draft did not consider all exact Entity candidates: "
+                    "Chapter Trace Draft did not consider all exact Entity candidates: "
                     + ", ".join(str(entity_id) for entity_id in sorted(missing_candidates, key=str))
                 )
 
         for mention in draft.mentions:
             if text[mention.start_offset : mention.end_offset] != mention.surface_text:
                 raise WorkflowStateError(
-                    f"Scene Trace Mention span does not match Draft text: "
+                    f"Chapter Trace Mention span does not match Draft text: "
                     f"{mention.start_offset}:{mention.end_offset}"
                 )
             unknown_considered = set(mention.considered_entity_ids) - available_entity_ids
             if unknown_considered:
                 raise WorkflowStateError(
-                    f"Scene Trace Mention considered Entities {unknown_entity_label}: "
+                    f"Chapter Trace Mention considered Entities {unknown_entity_label}: "
                     + ", ".join(str(entity_id) for entity_id in sorted(unknown_considered, key=str))
                 )
             if mention.resolution_status is EntityResolutionStatus.AMBIGUOUS:
                 raise WorkflowStateError(
-                    f"Scene Trace Mention remains ambiguous: {mention.surface_text}"
+                    f"Chapter Trace Mention remains ambiguous: {mention.surface_text}"
                 )
 
         new_entity_ids: dict[str, UUID] = {}
@@ -1179,14 +1332,14 @@ class EntityResolutionService:
                 )
             )
 
-        occurrences: list[SceneEntityOccurrence] = []
+        occurrences: list[ChapterEntityOccurrence] = []
         for occurrence_draft in draft.entity_occurrences:
             entity_id = occurrence_draft.resolved_entity_id
             if occurrence_draft.new_entity_temporary_name is not None:
                 entity_id = new_entity_ids[occurrence_draft.new_entity_temporary_name]
             assert entity_id is not None
             occurrences.append(
-                SceneEntityOccurrence(
+                ChapterEntityOccurrence(
                     occurrence_id=new_id(),
                     entity_id=entity_id,
                     presence_kind=occurrence_draft.presence_kind,
@@ -1198,10 +1351,10 @@ class EntityResolutionService:
             )
 
         return (
-            SceneTrace(
-                scene_trace_id=new_id(),
-                scene_id=scene.scene_id,
+            ChapterTrace(
+                chapter_trace_id=new_id(),
                 chapter_id=chapter.chapter_id,
+                volume_id=volume.volume_id,
                 source_document_id=document.document_id,
                 source_revision=source_revision,
                 mentions=tuple(mentions),
@@ -1219,16 +1372,22 @@ class EntityResolutionService:
 
     @staticmethod
     def _visible_identity_names(session, entries, snapshot):
-        scenes = {scene.scene_id: scene for scene in snapshot.scenes}
+        chapters = {chapter.chapter_id: chapter for chapter in snapshot.chapters}
         visible_entity_ids: set[UUID] = set()
         visible_aliases = []
         for entry in entries:
-            source_scene = (
-                scenes.get(entry.source_scene_id) if entry.source_scene_id is not None else None
+            source_chapter = (
+                chapters.get(entry.source_chapter_id)
+                if entry.source_chapter_id is not None
+                else None
             )
-            if entry.source_scene_id is not None and (
-                source_scene is None
-                or source_scene.narrative_order >= session.target_narrative_order
+            if entry.source_chapter_id is not None and (
+                source_chapter is None
+                or source_chapter.narrative_order > session.target_narrative_order
+                or (
+                    source_chapter.narrative_order == session.target_narrative_order
+                    and session.mode is WritingSessionMode.CREATE
+                )
             ):
                 continue
             for record in entry.records:
@@ -1354,10 +1513,12 @@ class DraftService:
         *,
         runs: WritingRunStore,
         sessions: WritingSessionService,
+        manuscripts: ManuscriptStore,
         clock: Clock = _utc_now,
     ) -> None:
         self._runs = runs
         self._sessions = sessions
+        self._manuscripts = manuscripts
         self._clock = clock
 
     def save(
@@ -1425,6 +1586,15 @@ class DraftService:
                 draft.parent_revision,
             )
             base_label = draft.parent_revision
+        else:
+            session = self._runs.load_session(writing_session_id)
+            if session.mode is WritingSessionMode.REVISE:
+                base = self._manuscripts.read_document(session.target_document_path)
+                if manuscript_revision(base) != session.base_document_revision:
+                    raise RevisionConflictError(
+                        "revision source manuscript changed after Writing Session start"
+                    )
+                base_label = str(session.base_document_revision)
         return _text_diff(
             base.decode("utf-8"),
             content.decode("utf-8"),
@@ -1536,14 +1706,14 @@ class PublicationService:
         *,
         writing_session_id: UUID,
         draft_revision: str,
-        scene_summary_text: str,
         chapter_summary_text: str,
-        scene_trace_draft: SceneTraceDraft,
+        volume_summary_text: str,
+        chapter_trace_draft: ChapterTraceDraft,
         review_refs: tuple[UUID, ...],
-        scene_main_entity_ids: tuple[UUID, ...] = (),
-        scene_key_changes: tuple[str, ...] = (),
-        scene_open_questions: tuple[str, ...] = (),
         chapter_main_entity_ids: tuple[UUID, ...] = (),
+        chapter_key_changes: tuple[str, ...] = (),
+        chapter_open_questions: tuple[str, ...] = (),
+        volume_main_entity_ids: tuple[UUID, ...] = (),
         canon_records: tuple[LedgerRecord, ...] = (),
         intent_revision_id: UUID | None = None,
         unresolved_questions: tuple[str, ...] = (),
@@ -1563,12 +1733,45 @@ class PublicationService:
         digest = manuscript_revision(manuscript)
         if draft.content_digest != digest:
             raise RevisionConflictError("Draft bytes do not match Draft metadata")
+        if draft.base_document_revision != session.base_document_revision:
+            raise RevisionConflictError("Draft does not bind the Writing Session Document base")
         snapshot = replay_ledger(self._ledger.read_entries())
         if snapshot.revision != session.base_canon_revision:
             raise RevisionConflictError("Canon changed after Writing Session start")
         current_intent = self._intent.load()
         if intent_revision(current_intent) != session.base_intent_revision:
             raise RevisionConflictError("Intent changed after Writing Session start")
+
+        current_documents = {item.document_id: item for item in snapshot.documents}
+        current_chapters = {item.chapter_id: item for item in snapshot.chapters}
+        base_document = current_documents.get(session.target_document_id)
+        base_chapter = current_chapters.get(session.target_chapter_id)
+        if session.mode is WritingSessionMode.REVISE:
+            if base_document is None or base_chapter is None:
+                raise RevisionConflictError("revision target left current Text Canon")
+            if (
+                base_document.relative_path != session.target_document_path
+                or base_document.document_kind is not DocumentKind.MANUSCRIPT
+                or base_document.revision != session.base_document_revision
+                or base_chapter.volume_id != session.target_volume_id
+                or base_chapter.chapter_number != session.target_chapter_number
+                or base_chapter.title != session.target_chapter_title
+                or base_chapter.narrative_order != session.target_narrative_order
+                or base_chapter.story_time != session.target_story_time
+                or base_chapter.pov_entity_id != session.pov_entity_id
+                or base_chapter.location_entity_id != session.location_entity_id
+                or base_chapter.status is not ChapterStatus.APPROVED
+                or base_chapter.source_document_id != base_document.document_id
+                or base_chapter.revision != base_document.revision
+            ):
+                raise RevisionConflictError("revision target changed after Writing Session start")
+            current_manuscript = self._manuscripts.read_document(base_document.relative_path)
+            if manuscript_revision(current_manuscript) != session.base_document_revision:
+                raise RevisionConflictError("revision source manuscript bytes changed")
+            if digest == session.base_document_revision:
+                raise ValueError("Chapter revision must change the approved manuscript bytes")
+        elif base_document is not None or base_chapter is not None:
+            raise RevisionConflictError("new Chapter target identity already exists")
 
         reviews = tuple(
             self._writing.load_review(writing_session_id, review_id) for review_id in review_refs
@@ -1582,67 +1785,85 @@ class PublicationService:
             document_kind=DocumentKind.MANUSCRIPT,
             revision=digest,
         )
-        scene = Scene(
-            scene_id=session.target_scene_id,
+        chapter = Chapter(
             chapter_id=session.target_chapter_id,
+            volume_id=session.target_volume_id,
+            chapter_number=session.target_chapter_number,
+            title=session.target_chapter_title,
             narrative_order=session.target_narrative_order,
             story_time=session.target_story_time,
             pov_entity_id=session.pov_entity_id,
             location_entity_id=session.location_entity_id,
-            status=SceneStatus.APPROVED,
+            status=ChapterStatus.APPROVED,
             source_document_id=document.document_id,
             revision=digest,
         )
-        chapter = self._updated_chapter(session)
-        scene_trace, new_entities = self._entity_resolution.materialize(
+        volume = self._updated_volume(session)
+        projected_chapter_summary = self._navigation.get_chapter_summary(session.target_chapter_id)
+        projected_volume_summary = self._navigation.get_volume_summary(session.target_volume_id)
+        projected_chapter_trace = self._navigation.get_chapter_trace(session.target_chapter_id)
+        base_chapter_summary = (
+            projected_chapter_summary[0] if projected_chapter_summary is not None else None
+        )
+        base_volume_summary = (
+            projected_volume_summary[0] if projected_volume_summary is not None else None
+        )
+        base_chapter_trace = (
+            projected_chapter_trace[0] if projected_chapter_trace is not None else None
+        )
+        if session.mode is WritingSessionMode.CREATE and any(
+            item is not None for item in (base_chapter_summary, base_chapter_trace)
+        ):
+            raise RevisionConflictError("new Chapter already has navigation memory")
+        chapter_trace, new_entities = self._entity_resolution.materialize(
             session=session,
             draft_revision=draft_revision,
             manuscript=manuscript,
-            draft=scene_trace_draft,
+            draft=chapter_trace_draft,
+            volume=volume,
             chapter=chapter,
-            scene=scene,
             document=document,
             new_id=self._new_id,
         )
         trace_main_entity_ids = tuple(
             occurrence.entity_id
-            for occurrence in scene_trace.entity_occurrences
+            for occurrence in chapter_trace.entity_occurrences
             if occurrence.prominence
             in {
                 EntityProminence.FOCUS,
                 EntityProminence.SUPPORTING,
             }
         )
-        scene_main_entity_ids = _unique_ids((*scene_main_entity_ids, *trace_main_entity_ids))
         chapter_main_entity_ids = _unique_ids((*chapter_main_entity_ids, *trace_main_entity_ids))
+        volume_main_entity_ids = _unique_ids((*volume_main_entity_ids, *trace_main_entity_ids))
         known_entity_ids = {
             *(entity.entity_id for entity in snapshot.entities),
             *(entity.entity_id for entity in new_entities),
         }
         unknown_entity_ids = (
-            set(scene_main_entity_ids) | set(chapter_main_entity_ids)
+            set(chapter_main_entity_ids) | set(volume_main_entity_ids)
         ) - known_entity_ids
         if unknown_entity_ids:
             raise ValueError(
                 "navigation summaries reference unknown Entity IDs: "
                 f"{sorted(map(str, unknown_entity_ids))}"
             )
-        scene_summary = SceneSummary(
-            scene_id=scene.scene_id,
+        chapter_summary = ChapterSummary(
             chapter_id=chapter.chapter_id,
-            scene_number_in_chapter=chapter.scene_ids.index(scene.scene_id) + 1,
+            volume_id=volume.volume_id,
+            chapter_number_in_volume=volume.chapter_ids.index(chapter.chapter_id) + 1,
             source_document_id=document.document_id,
             source_revision=document.revision,
-            summary=scene_summary_text,
-            main_entity_ids=scene_main_entity_ids,
-            key_changes=scene_key_changes,
-            open_questions=scene_open_questions,
-        )
-        chapter_summary = self._build_chapter_summary(
-            chapter,
-            scene_summary,
-            summary_text=chapter_summary_text,
+            summary=chapter_summary_text,
             main_entity_ids=chapter_main_entity_ids,
+            key_changes=chapter_key_changes,
+            open_questions=chapter_open_questions,
+        )
+        volume_summary = self._build_volume_summary(
+            volume,
+            chapter_summary,
+            summary_text=volume_summary_text,
+            main_entity_ids=volume_main_entity_ids,
         )
 
         prepared_at = self._clock()
@@ -1652,19 +1873,19 @@ class PublicationService:
         if len(change_sets) > 1:
             raise ValueError("Publication Canon can contain at most one Change Set")
         approved_at = change_sets[0].approved_at if change_sets else prepared_at
-        source_scene_id = change_sets[0].source_scene_id if change_sets else scene.scene_id
-        if source_scene_id != scene.scene_id:
-            raise ValueError("Publication Canon Change Set must bind the target Scene")
+        source_chapter_id = change_sets[0].source_chapter_id if change_sets else chapter.chapter_id
+        if source_chapter_id != chapter.chapter_id:
+            raise ValueError("Publication Canon Change Set must bind the target Chapter")
         ledger_entry = CanonLedgerEntry(
             ledger_sequence=snapshot.last_sequence + 1,
             ledger_entry_id=self._new_id(),
             base_revision=snapshot.revision,
             approved_at=approved_at,
-            source_scene_id=scene.scene_id,
+            source_chapter_id=chapter.chapter_id,
             records=(
                 *(EntityLedgerRecord(value=entity) for entity in new_entities),
                 DocumentLedgerRecord(value=document),
-                SceneLedgerRecord(value=scene),
+                ChapterLedgerRecord(value=chapter),
                 *canon_records,
             ),
         )
@@ -1674,7 +1895,7 @@ class PublicationService:
                 source_ref = record.value
                 if (
                     source_ref.document_id != document.document_id
-                    or source_ref.scene_id != scene.scene_id
+                    or source_ref.chapter_id != chapter.chapter_id
                     or source_ref.document_revision != document.revision
                     or source_ref.excerpt.encode("utf-8") not in manuscript
                 ):
@@ -1695,28 +1916,54 @@ class PublicationService:
 
         publication_id = self._new_id()
         manuscript_diff = _text_diff(
-            "",
+            (
+                current_manuscript.decode("utf-8")
+                if session.mode is WritingSessionMode.REVISE
+                else ""
+            ),
             manuscript.decode("utf-8"),
-            "/dev/null",
+            (
+                f"{document.relative_path}@{session.base_document_revision}"
+                if session.mode is WritingSessionMode.REVISE
+                else "/dev/null"
+            ),
             document.relative_path,
         )
+        before_structure = (
+            base_chapter.to_canonical_json() + "\n" + volume.to_canonical_json()
+            if session.mode is WritingSessionMode.REVISE
+            else ""
+        )
         structure_diff = _text_diff(
-            "",
-            chapter.to_canonical_json(),
-            "/dev/null",
-            f"chapter:{chapter.chapter_id}",
+            before_structure,
+            chapter.to_canonical_json() + "\n" + volume.to_canonical_json(),
+            (
+                f"chapter-structure:{chapter.chapter_id}:base"
+                if session.mode is WritingSessionMode.REVISE
+                else "/dev/null"
+            ),
+            f"volume:{volume.volume_id}",
+        )
+        before_summaries = "\n".join(
+            item.to_canonical_json()
+            for item in (base_chapter_summary, base_volume_summary)
+            if item is not None
         )
         summary_diff = _text_diff(
-            "",
-            scene_summary.to_canonical_json() + "\n" + chapter_summary.to_canonical_json(),
-            "/dev/null",
+            before_summaries,
+            chapter_summary.to_canonical_json() + "\n" + volume_summary.to_canonical_json(),
+            (f"navigation-memory:{chapter.chapter_id}:base" if before_summaries else "/dev/null"),
             "navigation-memory",
         )
-        scene_trace_diff = _text_diff(
-            "",
-            scene_trace.to_canonical_json(),
-            "/dev/null",
-            f"scene-trace:{scene_trace.scene_id}",
+        chapter_trace_diff = _text_diff(
+            base_chapter_trace.to_canonical_json() if base_chapter_trace is not None else "",
+            chapter_trace.to_canonical_json(),
+            (
+                f"chapter-trace:{chapter_trace.chapter_id}:base"
+                if base_chapter_trace is not None
+                else "/dev/null"
+            ),
+            f"chapter-trace:{chapter_trace.chapter_id}",
         )
         canon_diff = "\n".join(
             f"+ {record.record_type}:{record.value.to_canonical_json()}"
@@ -1726,16 +1973,20 @@ class PublicationService:
             "publication_id": str(publication_id),
             "project_id": str(manifest.project_id),
             "writing_session_id": str(writing_session_id),
+            "mode": session.mode.value,
             "draft_revision": draft_revision,
             "base_canon_revision": snapshot.revision,
             "base_document_revision": session.base_document_revision,
+            "base_chapter_summary_digest": _model_digest(base_chapter_summary),
+            "base_volume_summary_digest": _model_digest(base_volume_summary),
+            "base_chapter_trace_digest": _model_digest(base_chapter_trace),
             "base_intent_revision": session.base_intent_revision,
             "target_document": document.model_dump(mode="json"),
-            "scene_change": scene.model_dump(mode="json"),
             "chapter_change": chapter.model_dump(mode="json"),
-            "scene_summary_change": scene_summary.model_dump(mode="json"),
+            "volume_change": volume.model_dump(mode="json"),
             "chapter_summary_change": chapter_summary.model_dump(mode="json"),
-            "scene_trace_change": scene_trace.model_dump(mode="json"),
+            "volume_summary_change": volume_summary.model_dump(mode="json"),
+            "chapter_trace_change": chapter_trace.model_dump(mode="json"),
             "intent_revision_id": str(intent_revision_id) if intent_revision_id else None,
             "intent_candidate_revision": (
                 selected_intent.candidate_revision if selected_intent else None
@@ -1749,16 +2000,20 @@ class PublicationService:
             publication_id=publication_id,
             project_id=manifest.project_id,
             writing_session_id=writing_session_id,
+            mode=session.mode,
             draft_revision=draft_revision,
             base_canon_revision=snapshot.revision,
             base_document_revision=session.base_document_revision,
+            base_chapter_summary_digest=_model_digest(base_chapter_summary),
+            base_volume_summary_digest=_model_digest(base_volume_summary),
+            base_chapter_trace_digest=_model_digest(base_chapter_trace),
             base_intent_revision=session.base_intent_revision,
             target_document=document,
-            scene_change=scene,
             chapter_change=chapter,
-            scene_summary_change=scene_summary,
+            volume_change=volume,
             chapter_summary_change=chapter_summary,
-            scene_trace_change=scene_trace,
+            volume_summary_change=volume_summary,
+            chapter_trace_change=chapter_trace,
             intent_revision_id=intent_revision_id,
             intent_candidate_revision=(
                 selected_intent.candidate_revision if selected_intent else None
@@ -1769,7 +2024,7 @@ class PublicationService:
             manuscript_diff=manuscript_diff,
             structure_diff=structure_diff,
             summary_diff=summary_diff,
-            scene_trace_diff=scene_trace_diff,
+            chapter_trace_diff=chapter_trace_diff,
             intent_diff=selected_intent.intent_diff if selected_intent else None,
             canon_diff=canon_diff,
             unresolved_questions=unresolved_questions,
@@ -1845,14 +2100,23 @@ class PublicationService:
             raise RevisionConflictError("Publication Draft metadata changed")
         self._validate_preflight(plan, session)
 
-        self._manuscripts.install_document(plan.target_document.relative_path, manuscript)
+        publication = self._set_status(publication, PublicationStatus.APPLYING)
+        if plan.mode is WritingSessionMode.REVISE:
+            assert plan.base_document_revision is not None
+            self._manuscripts.replace_document(
+                plan.target_document.relative_path,
+                expected_revision=plan.base_document_revision,
+                content=manuscript,
+            )
+        else:
+            self._manuscripts.install_document(plan.target_document.relative_path, manuscript)
         publication = self._set_status(publication, PublicationStatus.MANUSCRIPT_INSTALLED)
 
-        self._navigation_sources.save_chapter(plan.chapter_change)
-        self._navigation_sources.save_scene_summary(plan.scene_summary_change)
+        self._navigation_sources.save_volume(plan.volume_change)
         self._navigation_sources.save_chapter_summary(plan.chapter_summary_change)
-        if plan.scene_trace_change is not None:
-            self._navigation_sources.save_scene_trace(plan.scene_trace_change)
+        self._navigation_sources.save_volume_summary(plan.volume_summary_change)
+        if plan.chapter_trace_change is not None:
+            self._navigation_sources.save_chapter_trace(plan.chapter_trace_change)
         publication = self._set_status(publication, PublicationStatus.NAVIGATION_INSTALLED)
 
         if plan.intent_revision_id is not None:
@@ -1899,6 +2163,8 @@ class PublicationService:
         plan: PublicationPlan,
         session: WritingSession,
     ) -> None:
+        if session.mode is not plan.mode:
+            raise RevisionConflictError("Publication mode no longer matches its Writing Session")
         entries = self._ledger.read_entries()
         existing = next(
             (
@@ -1913,18 +2179,87 @@ class PublicationService:
             raise RevisionConflictError("Canon no longer matches Publication base")
         if existing is not None and existing != plan.ledger_entry:
             raise RevisionConflictError("Publication Ledger entry has different content")
+        current_documents = {document.document_id: document for document in snapshot.documents}
+        current_chapters = {chapter.chapter_id: chapter for chapter in snapshot.chapters}
+        current_document = current_documents.get(plan.target_document.document_id)
+        current_chapter = current_chapters.get(plan.chapter_change.chapter_id)
+        if existing is None:
+            if plan.mode is WritingSessionMode.REVISE:
+                if (
+                    current_document is None
+                    or current_chapter is None
+                    or current_document.relative_path != plan.target_document.relative_path
+                    or current_document.document_kind is not plan.target_document.document_kind
+                    or current_document.revision != plan.base_document_revision
+                    or current_chapter.revision != plan.base_document_revision
+                    or current_chapter.model_copy(update={"revision": plan.chapter_change.revision})
+                    != plan.chapter_change
+                ):
+                    raise RevisionConflictError(
+                        "Chapter revision target no longer matches Publication base"
+                    )
+            elif current_document is not None or current_chapter is not None:
+                raise RevisionConflictError("new Chapter target identity already exists")
+        elif current_document != plan.target_document or current_chapter != plan.chapter_change:
+            raise RevisionConflictError("installed Text Canon differs from Publication plan")
         current_intent_revision = intent_revision(self._intent.load())
         allowed_intent_revisions = {plan.base_intent_revision}
         if plan.intent_candidate_revision is not None:
             allowed_intent_revisions.add(plan.intent_candidate_revision)
         if current_intent_revision not in allowed_intent_revisions:
             raise RevisionConflictError("Intent no longer matches Publication base or candidate")
-        current_chapter = self._navigation.get_chapter(session.target_chapter_id)
+        current_volume = self._navigation.get_volume(session.target_volume_id)
         if (
-            current_chapter != plan.chapter_change
-            and self._updated_chapter(session) != plan.chapter_change
+            current_volume != plan.volume_change
+            and self._updated_volume(session) != plan.volume_change
         ):
-            raise RevisionConflictError("Chapter structure changed after Publication prepare")
+            raise RevisionConflictError("Volume structure changed after Publication prepare")
+        self._validate_navigation_base(
+            label="Chapter Summary",
+            current=(
+                projected[0]
+                if (projected := self._navigation.get_chapter_summary(session.target_chapter_id))
+                is not None
+                else None
+            ),
+            base_digest=plan.base_chapter_summary_digest,
+            target=plan.chapter_summary_change,
+        )
+        self._validate_navigation_base(
+            label="Volume Summary",
+            current=(
+                projected[0]
+                if (projected := self._navigation.get_volume_summary(session.target_volume_id))
+                is not None
+                else None
+            ),
+            base_digest=plan.base_volume_summary_digest,
+            target=plan.volume_summary_change,
+        )
+        self._validate_navigation_base(
+            label="Chapter Trace",
+            current=(
+                projected[0]
+                if (projected := self._navigation.get_chapter_trace(session.target_chapter_id))
+                is not None
+                else None
+            ),
+            base_digest=plan.base_chapter_trace_digest,
+            target=plan.chapter_trace_change,
+        )
+
+    @staticmethod
+    def _validate_navigation_base(
+        *,
+        label: str,
+        current,
+        base_digest: str | None,
+        target,
+    ) -> None:
+        current_digest = _model_digest(current)
+        target_digest = _model_digest(target)
+        if current_digest not in {base_digest, target_digest}:
+            raise RevisionConflictError(f"{label} changed after Publication prepare")
 
     def _set_status(
         self,
@@ -1937,81 +2272,92 @@ class PublicationService:
         self._publications.replace(updated)
         return updated
 
-    def _updated_chapter(self, session: WritingSession) -> Chapter:
-        current = self._navigation.get_chapter(session.target_chapter_id)
+    def _updated_volume(self, session: WritingSession) -> Volume:
+        current = self._navigation.get_volume(session.target_volume_id)
+        if session.mode is WritingSessionMode.REVISE:
+            if current is None or session.target_chapter_id not in current.chapter_ids:
+                raise RevisionConflictError("revision target left its Volume")
+            if (
+                current.volume_number != session.target_volume_number
+                or current.title != session.target_volume_title
+            ):
+                raise RevisionConflictError("revision target Volume metadata changed")
+            return current
         if current is None:
-            return Chapter(
-                chapter_id=session.target_chapter_id,
-                chapter_number=session.target_chapter_number,
-                title=session.target_chapter_title,
-                scene_ids=(session.target_scene_id,),
+            return Volume(
+                volume_id=session.target_volume_id,
+                volume_number=session.target_volume_number,
+                title=session.target_volume_title,
+                chapter_ids=(session.target_chapter_id,),
             )
-        scene_ids = list(current.scene_ids)
-        if session.before_scene_id is None:
+        chapter_ids = list(current.chapter_ids)
+        if session.before_chapter_id is None:
             index = 0
         else:
             try:
-                index = scene_ids.index(session.before_scene_id) + 1
+                index = chapter_ids.index(session.before_chapter_id) + 1
             except ValueError as exc:
-                raise RevisionConflictError("Session before boundary left its Chapter") from exc
-        if session.after_scene_id is not None:
+                raise RevisionConflictError("Session before boundary left its Volume") from exc
+        if session.after_chapter_id is not None:
             try:
-                after_index = scene_ids.index(session.after_scene_id)
+                after_index = chapter_ids.index(session.after_chapter_id)
             except ValueError as exc:
-                raise RevisionConflictError("Session after boundary left its Chapter") from exc
+                raise RevisionConflictError("Session after boundary left its Volume") from exc
             if after_index != index:
-                raise RevisionConflictError("Session Chapter boundaries are no longer adjacent")
-        elif index != len(scene_ids):
-            raise RevisionConflictError("Session append boundary is no longer Chapter end")
-        scene_ids.insert(index, session.target_scene_id)
-        return current.model_copy(update={"scene_ids": tuple(scene_ids)})
+                raise RevisionConflictError("Session Volume boundaries are no longer adjacent")
+        elif index != len(chapter_ids):
+            raise RevisionConflictError("Session append boundary is no longer Volume end")
+        chapter_ids.insert(index, session.target_chapter_id)
+        return current.model_copy(update={"chapter_ids": tuple(chapter_ids)})
 
-    def _build_chapter_summary(
+    def _build_volume_summary(
         self,
-        chapter: Chapter,
-        new_scene_summary: SceneSummary,
+        volume: Volume,
+        new_chapter_summary: ChapterSummary,
         *,
         summary_text: str,
         main_entity_ids: tuple[UUID, ...],
-    ) -> ChapterSummary:
-        summaries: dict[UUID, SceneSummary] = {new_scene_summary.scene_id: new_scene_summary}
-        for scene_id in chapter.scene_ids:
-            if scene_id == new_scene_summary.scene_id:
+    ) -> VolumeSummary:
+        summaries: dict[UUID, ChapterSummary] = {
+            new_chapter_summary.chapter_id: new_chapter_summary
+        }
+        for chapter_id in volume.chapter_ids:
+            if chapter_id == new_chapter_summary.chapter_id:
                 continue
-            projected = self._navigation.get_scene_summary(scene_id)
+            projected = self._navigation.get_chapter_summary(chapter_id)
             if projected is None or projected[1]:
                 raise WorkflowStateError(
-                    f"Publication Chapter Summary requires current Scene Summary: {scene_id}"
+                    f"Publication Volume Summary requires current Chapter Summary: {chapter_id}"
                 )
-            summaries[scene_id] = projected[0]
-        ordered = tuple(summaries[scene_id] for scene_id in chapter.scene_ids)
-        summary = ChapterSummary(
-            chapter_id=chapter.chapter_id,
-            chapter_number=chapter.chapter_number,
-            title=chapter.title,
-            scene_ids=chapter.scene_ids,
-            scene_summary_dependencies=tuple(
-                SceneSummaryDependency(
-                    scene_id=item.scene_id,
+            summaries[chapter_id] = projected[0]
+        ordered = tuple(summaries[chapter_id] for chapter_id in volume.chapter_ids)
+        summary = VolumeSummary(
+            volume_id=volume.volume_id,
+            volume_number=volume.volume_number,
+            title=volume.title,
+            chapter_ids=volume.chapter_ids,
+            chapter_summary_dependencies=tuple(
+                ChapterSummaryDependency(
+                    chapter_id=item.chapter_id,
                     source_revision=item.source_revision,
-                    summary_digest=scene_summary_digest(item),
+                    summary_digest=chapter_summary_digest(item),
                 )
                 for item in ordered
             ),
             summary=summary_text,
             main_entity_ids=main_entity_ids,
         )
-        if chapter_summary_is_stale(
+        if volume_summary_is_stale(
             summary,
-            chapter=chapter,
-            scene_summaries=summaries,
-            stale_scene_ids=set(),
+            volume=volume,
+            chapter_summaries=summaries,
+            stale_chapter_ids=set(),
         ):
-            raise ValueError("Chapter Summary does not bind current Scene Summaries")
+            raise ValueError("Volume Summary does not bind current Chapter Summaries")
         return summary
 
 
-class SceneTraceBackfillService:
+class ChapterTraceBackfillService:
     """Prepare and transactionally install a Trace for approved historical prose."""
 
     def __init__(
@@ -2025,7 +2371,7 @@ class SceneTraceBackfillService:
         navigation: NavigationQueryPort,
         canon: CanonQueryService,
         write_lock: ProjectWriteLock,
-        backfills: SceneTraceBackfillStore,
+        backfills: ChapterTraceBackfillStore,
         entity_resolution: EntityResolutionService,
         new_id: IdFactory = uuid4,
         clock: Clock = _utc_now,
@@ -2046,22 +2392,22 @@ class SceneTraceBackfillService:
     def source(
         self,
         *,
+        volume_id: UUID,
         chapter_id: UUID,
-        scene_id: UUID,
-    ) -> SceneTraceBackfillSource:
+    ) -> ChapterTraceBackfillSource:
         manifest = self._projects.load_manifest()
         _require_ready(manifest)
-        chapter, scene, document, manuscript = self._approved_scene(
+        volume, chapter, document, manuscript = self._approved_chapter(
+            volume_id=volume_id,
             chapter_id=chapter_id,
-            scene_id=scene_id,
         )
-        projected_trace = self._navigation.get_scene_trace(scene_id)
+        projected_trace = self._navigation.get_chapter_trace(chapter_id)
         current_trace = projected_trace[0] if projected_trace is not None else None
         snapshot = replay_ledger(self._ledger.read_entries())
         text = manuscript.decode("utf-8")
-        exact_candidates = self._entity_resolution.approved_scene_candidates(
+        exact_candidates = self._entity_resolution.approved_chapter_candidates(
             text,
-            story_time=scene.story_time,
+            story_time=chapter.story_time,
         )
         candidate_entity_ids = {
             entity_id
@@ -2069,11 +2415,11 @@ class SceneTraceBackfillService:
             for entity_id in candidate.candidate_entity_ids
         }
         entities = {entity.entity_id: entity for entity in snapshot.entities}
-        return SceneTraceBackfillSource(
+        return ChapterTraceBackfillSource(
             project_id=manifest.project_id,
             base_canon_revision=snapshot.revision,
+            volume=volume,
             chapter=chapter,
-            scene=scene,
             document=document,
             text=text,
             exact_candidates=exact_candidates,
@@ -2084,7 +2430,7 @@ class SceneTraceBackfillService:
             current_trace=current_trace,
             current_trace_stale=projected_trace[1] if projected_trace is not None else None,
             current_trace_digest=(
-                scene_trace_digest(current_trace) if current_trace is not None else None
+                chapter_trace_digest(current_trace) if current_trace is not None else None
             ),
         )
 
@@ -2092,8 +2438,10 @@ class SceneTraceBackfillService:
         entity = self._canon.get_entity(entity_id)
         if entity is None:
             raise ValueError(f"entity does not exist: {entity_id}")
-        scenes = replay_ledger(self._ledger.read_entries()).scenes
-        before_narrative_order = max(scene.narrative_order for scene in scenes) + 1 if scenes else 1
+        chapters = replay_ledger(self._ledger.read_entries()).chapters
+        before_narrative_order = (
+            max(chapter.narrative_order for chapter in chapters) + 1 if chapters else 1
+        )
         return EntityLine(
             entity=entity,
             occurrences=self._navigation.entity_occurrences(
@@ -2105,12 +2453,12 @@ class SceneTraceBackfillService:
     def prepare(
         self,
         *,
+        volume_id: UUID,
         chapter_id: UUID,
-        scene_id: UUID,
         source_revision: str,
-        scene_trace_draft: SceneTraceDraft,
-    ) -> SceneTraceBackfill:
-        source = self.source(chapter_id=chapter_id, scene_id=scene_id)
+        chapter_trace_draft: ChapterTraceDraft,
+    ) -> ChapterTraceBackfill:
+        source = self.source(volume_id=volume_id, chapter_id=chapter_id)
         if source.source_revision != source_revision:
             raise RevisionConflictError("Trace Backfill source revision changed")
         manuscript = source.text.encode("utf-8")
@@ -2118,9 +2466,9 @@ class SceneTraceBackfillService:
             base_canon_revision=source.base_canon_revision,
             source_revision=source_revision,
             manuscript=manuscript,
-            draft=scene_trace_draft,
+            draft=chapter_trace_draft,
+            volume=source.volume,
             chapter=source.chapter,
-            scene=source.scene,
             document=source.document,
             new_id=self._new_id,
         )
@@ -2135,7 +2483,7 @@ class SceneTraceBackfillService:
                 ledger_entry_id=self._new_id(),
                 base_revision=snapshot.revision,
                 approved_at=prepared_at,
-                source_scene_id=source.scene.scene_id,
+                source_chapter_id=source.chapter.chapter_id,
                 records=tuple(EntityLedgerRecord(value=entity) for entity in new_entities),
             )
             if new_entities
@@ -2147,11 +2495,15 @@ class SceneTraceBackfillService:
         before_trace = (
             source.current_trace.to_canonical_json() if source.current_trace is not None else ""
         )
-        scene_trace_diff = _text_diff(
+        chapter_trace_diff = _text_diff(
             before_trace,
             trace.to_canonical_json(),
-            (f"scene-trace:{scene_id}:base" if source.current_trace is not None else "/dev/null"),
-            f"scene-trace:{scene_id}:candidate",
+            (
+                f"chapter-trace:{chapter_id}:base"
+                if source.current_trace is not None
+                else "/dev/null"
+            ),
+            f"chapter-trace:{chapter_id}:candidate",
         )
         canon_diff = (
             "\n".join(
@@ -2165,52 +2517,52 @@ class SceneTraceBackfillService:
         protected = {
             "backfill_id": str(backfill_id),
             "project_id": str(source.project_id),
+            "volume_id": str(volume_id),
             "chapter_id": str(chapter_id),
-            "scene_id": str(scene_id),
             "source_document_id": str(source.document.document_id),
             "source_revision": source_revision,
             "base_canon_revision": source.base_canon_revision,
-            "base_scene_trace_digest": source.current_trace_digest,
-            "scene_trace_change": trace.model_dump(mode="json"),
+            "base_chapter_trace_digest": source.current_trace_digest,
+            "chapter_trace_change": trace.model_dump(mode="json"),
             "ledger_entry": (
                 ledger_entry.model_dump(mode="json") if ledger_entry is not None else None
             ),
         }
-        plan = SceneTraceBackfillPlan(
+        plan = ChapterTraceBackfillPlan(
             backfill_id=backfill_id,
             project_id=source.project_id,
+            volume_id=volume_id,
             chapter_id=chapter_id,
-            scene_id=scene_id,
             source_document_id=source.document.document_id,
             source_revision=source_revision,
             base_canon_revision=source.base_canon_revision,
-            base_scene_trace_digest=source.current_trace_digest,
-            scene_trace_change=trace,
+            base_chapter_trace_digest=source.current_trace_digest,
+            chapter_trace_change=trace,
             ledger_entry=ledger_entry,
-            scene_trace_diff=scene_trace_diff,
+            chapter_trace_diff=chapter_trace_diff,
             canon_diff=canon_diff,
-            approval_digest=approval_digest("scene_trace_backfill", protected),
+            approval_digest=approval_digest("chapter_trace_backfill", protected),
             prepared_at=prepared_at,
         )
-        backfill = SceneTraceBackfill(
+        backfill = ChapterTraceBackfill(
             plan=plan,
-            status=SceneTraceBackfillStatus.PREPARED,
+            status=ChapterTraceBackfillStatus.PREPARED,
         )
         self._backfills.create(backfill)
         return backfill
 
-    def inspect(self, backfill_id: UUID) -> SceneTraceBackfill:
+    def inspect(self, backfill_id: UUID) -> ChapterTraceBackfill:
         return self._backfills.load(backfill_id)
 
-    def approve(self, backfill_id: UUID, digest: str) -> SceneTraceBackfill:
+    def approve(self, backfill_id: UUID, digest: str) -> ChapterTraceBackfill:
         backfill = self._backfills.load(backfill_id)
-        if backfill.status is not SceneTraceBackfillStatus.PREPARED:
+        if backfill.status is not ChapterTraceBackfillStatus.PREPARED:
             raise WorkflowStateError("only a prepared Trace Backfill can be approved")
         if digest != backfill.plan.approval_digest:
             raise ApprovalMismatchError("Trace Backfill approval digest does not match")
         approved = backfill.model_copy(
             update={
-                "status": SceneTraceBackfillStatus.APPROVED,
+                "status": ChapterTraceBackfillStatus.APPROVED,
                 "approval": Approval(
                     operation_id=backfill_id,
                     approval_digest=digest,
@@ -2221,24 +2573,24 @@ class SceneTraceBackfillService:
         self._backfills.replace(approved)
         return approved
 
-    def apply(self, backfill_id: UUID) -> SceneTraceBackfill:
+    def apply(self, backfill_id: UUID) -> ChapterTraceBackfill:
         return self._advance(backfill_id)
 
-    def recover(self, backfill_id: UUID) -> SceneTraceBackfill:
+    def recover(self, backfill_id: UUID) -> ChapterTraceBackfill:
         return self._advance(backfill_id)
 
-    def _advance(self, backfill_id: UUID) -> SceneTraceBackfill:
+    def _advance(self, backfill_id: UUID) -> ChapterTraceBackfill:
         with self._write_lock.acquire():
             backfill = self._backfills.load(backfill_id)
-            if backfill.status is SceneTraceBackfillStatus.COMPLETED:
+            if backfill.status is ChapterTraceBackfillStatus.COMPLETED:
                 return backfill
-            if backfill.status is SceneTraceBackfillStatus.PREPARED:
+            if backfill.status is ChapterTraceBackfillStatus.PREPARED:
                 raise WorkflowStateError("Trace Backfill must be approved before apply")
             try:
                 return self._advance_under_lock(backfill)
             except Exception as exc:
                 stored = self._backfills.load(backfill_id)
-                if stored.status is SceneTraceBackfillStatus.APPROVED:
+                if stored.status is ChapterTraceBackfillStatus.APPROVED:
                     raise
                 raise TraceBackfillRecoveryRequiredError(
                     f"Trace Backfill {backfill_id} requires recover: {exc}"
@@ -2246,8 +2598,8 @@ class SceneTraceBackfillService:
 
     def _advance_under_lock(
         self,
-        backfill: SceneTraceBackfill,
-    ) -> SceneTraceBackfill:
+        backfill: ChapterTraceBackfill,
+    ) -> ChapterTraceBackfill:
         plan = backfill.plan
         self._validate_preflight(plan)
         manifest = self._projects.load_manifest()
@@ -2271,31 +2623,31 @@ class SceneTraceBackfillService:
                 self._ledger.append_entry(entry)
             elif existing != entry:
                 raise RevisionConflictError("Trace Backfill Ledger entry has different content")
-        backfill = self._set_status(backfill, SceneTraceBackfillStatus.LEDGER_APPENDED)
+        backfill = self._set_status(backfill, ChapterTraceBackfillStatus.LEDGER_APPENDED)
 
-        self._navigation_sources.save_scene_trace(plan.scene_trace_change)
-        backfill = self._set_status(backfill, SceneTraceBackfillStatus.TRACE_INSTALLED)
+        self._navigation_sources.save_chapter_trace(plan.chapter_trace_change)
+        backfill = self._set_status(backfill, ChapterTraceBackfillStatus.TRACE_INSTALLED)
 
         snapshot = replay_ledger(self._ledger.read_entries())
         self._projection.replace(manifest, snapshot)
-        backfill = self._set_status(backfill, SceneTraceBackfillStatus.PROJECTION_REBUILT)
+        backfill = self._set_status(backfill, ChapterTraceBackfillStatus.PROJECTION_REBUILT)
 
         completed = backfill.model_copy(
             update={
-                "status": SceneTraceBackfillStatus.COMPLETED,
+                "status": ChapterTraceBackfillStatus.COMPLETED,
                 "completed_at": self._clock(),
             }
         )
         self._backfills.replace(completed)
         return completed
 
-    def _validate_preflight(self, plan: SceneTraceBackfillPlan) -> None:
+    def _validate_preflight(self, plan: ChapterTraceBackfillPlan) -> None:
         manifest = self._projects.load_manifest()
         if manifest.project_id != plan.project_id:
             raise WorkflowStateError("Trace Backfill belongs to another Project")
-        _chapter, _scene, document, _manuscript = self._approved_scene(
+        _volume, _chapter, document, _manuscript = self._approved_chapter(
+            volume_id=plan.volume_id,
             chapter_id=plan.chapter_id,
-            scene_id=plan.scene_id,
         )
         if document.document_id != plan.source_document_id:
             raise RevisionConflictError("Trace Backfill source Document changed")
@@ -2322,44 +2674,44 @@ class SceneTraceBackfillService:
             if existing is not None and existing != entry:
                 raise RevisionConflictError("Trace Backfill Ledger entry has different content")
 
-        projected_trace = self._navigation.get_scene_trace(plan.scene_id)
+        projected_trace = self._navigation.get_chapter_trace(plan.chapter_id)
         current_trace = projected_trace[0] if projected_trace is not None else None
-        current_digest = scene_trace_digest(current_trace) if current_trace is not None else None
-        candidate_digest = scene_trace_digest(plan.scene_trace_change)
+        current_digest = chapter_trace_digest(current_trace) if current_trace is not None else None
+        candidate_digest = chapter_trace_digest(plan.chapter_trace_change)
         if current_digest not in {
-            plan.base_scene_trace_digest,
+            plan.base_chapter_trace_digest,
             candidate_digest,
         }:
-            raise RevisionConflictError("Scene Trace changed after Backfill prepare")
+            raise RevisionConflictError("Chapter Trace changed after Backfill prepare")
 
-    def _approved_scene(
+    def _approved_chapter(
         self,
         *,
+        volume_id: UUID,
         chapter_id: UUID,
-        scene_id: UUID,
-    ) -> tuple[Chapter, Scene, Document, bytes]:
-        chapter = self._navigation.get_chapter(chapter_id)
+    ) -> tuple[Volume, Chapter, Document, bytes]:
+        volume = self._navigation.get_volume(volume_id)
+        if volume is None:
+            raise VolumeNotFoundError(f"Trace Backfill Volume does not exist: {volume_id}")
+        volume_chapter_ids = {
+            chapter.chapter_id for chapter, _number in self._navigation.volume_chapters(volume_id)
+        }
+        chapter = self._canon.get_chapter(chapter_id)
         if chapter is None:
             raise ChapterNotFoundError(f"Trace Backfill Chapter does not exist: {chapter_id}")
-        chapter_scene_ids = {
-            scene.scene_id for scene, _number in self._navigation.chapter_scenes(chapter_id)
-        }
-        scene = self._canon.get_scene(scene_id)
-        if scene is None:
-            raise SceneNotFoundError(f"Trace Backfill Scene does not exist: {scene_id}")
-        if scene_id not in chapter_scene_ids or (
-            scene.chapter_id is not None and scene.chapter_id != chapter_id
+        if chapter_id not in volume_chapter_ids or (
+            chapter.volume_id is not None and chapter.volume_id != volume_id
         ):
-            raise WorkflowStateError("Trace Backfill Scene does not belong to the Chapter")
-        if scene.status is not SceneStatus.APPROVED:
-            raise WorkflowStateError("Trace Backfill requires an approved Scene")
-        document = self._canon.get_document(scene.source_document_id)
+            raise WorkflowStateError("Trace Backfill Chapter does not belong to the Volume")
+        if chapter.status is not ChapterStatus.APPROVED:
+            raise WorkflowStateError("Trace Backfill requires an approved Chapter")
+        document = self._canon.get_document(chapter.source_document_id)
         if document is None:
             raise WorkflowStateError("Trace Backfill source Document does not exist")
         if document.document_kind is not DocumentKind.MANUSCRIPT:
             raise WorkflowStateError("Trace Backfill source is not manuscript")
-        if scene.revision != document.revision:
-            raise RevisionConflictError("Trace Backfill Scene and Document revisions differ")
+        if chapter.revision != document.revision:
+            raise RevisionConflictError("Trace Backfill Chapter and Document revisions differ")
         manuscript = self._manuscripts.read_document(document.relative_path)
         if manuscript_revision(manuscript) != document.revision:
             raise RevisionConflictError("Trace Backfill manuscript bytes changed")
@@ -2367,13 +2719,13 @@ class SceneTraceBackfillService:
             manuscript.decode("utf-8")
         except UnicodeDecodeError as exc:
             raise ValueError("Trace Backfill manuscript must be UTF-8") from exc
-        return chapter, scene, document, manuscript
+        return volume, chapter, document, manuscript
 
     def _set_status(
         self,
-        backfill: SceneTraceBackfill,
-        status: SceneTraceBackfillStatus,
-    ) -> SceneTraceBackfill:
+        backfill: ChapterTraceBackfill,
+        status: ChapterTraceBackfillStatus,
+    ) -> ChapterTraceBackfill:
         if _trace_backfill_status_index(backfill.status) >= _trace_backfill_status_index(status):
             return backfill
         updated = backfill.model_copy(update={"status": status})
@@ -2385,8 +2737,8 @@ def _publication_status_index(status: PublicationStatus) -> int:
     return list(PublicationStatus).index(status)
 
 
-def _trace_backfill_status_index(status: SceneTraceBackfillStatus) -> int:
-    return list(SceneTraceBackfillStatus).index(status)
+def _trace_backfill_status_index(status: ChapterTraceBackfillStatus) -> int:
+    return list(ChapterTraceBackfillStatus).index(status)
 
 
 def _unique_ids(values: tuple[UUID, ...]) -> tuple[UUID, ...]:
@@ -2421,6 +2773,12 @@ def _intent_diff(current: IntentContent | None, candidate: IntentContent) -> str
             )
         )
     return "\n".join(sections)
+
+
+def _model_digest(model) -> str | None:
+    if model is None:
+        return None
+    return "sha256:" + hashlib.sha256(model.to_canonical_json().encode("utf-8")).hexdigest()
 
 
 def _text_diff(before: str, after: str, before_name: str, after_name: str) -> str:

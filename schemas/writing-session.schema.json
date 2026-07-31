@@ -2,7 +2,7 @@
   "$defs": {
     "StoryTime": {
       "additionalProperties": false,
-      "description": "A calendar-neutral position on a story timeline.\n\nNarrative order deliberately does not belong to this value object. It is a\nproperty of the scene or event through which readers encounter the event.",
+      "description": "A calendar-neutral position on a story timeline.\n\nNarrative order deliberately does not belong to this value object. It is a\nproperty of the chapter or event through which readers encounter the event.",
       "properties": {
         "display_time": {
           "anyOf": [
@@ -104,6 +104,14 @@
       "title": "StoryTimeKind",
       "type": "string"
     },
+    "WritingSessionMode": {
+      "enum": [
+        "create",
+        "revise"
+      ],
+      "title": "WritingSessionMode",
+      "type": "string"
+    },
     "WritingSessionStatus": {
       "enum": [
         "open",
@@ -117,7 +125,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
-    "after_scene_id": {
+    "after_chapter_id": {
       "anyOf": [
         {
           "format": "uuid",
@@ -128,7 +136,7 @@
         }
       ],
       "default": null,
-      "title": "After Scene Id"
+      "title": "After Chapter Id"
     },
     "author_goal": {
       "minLength": 1,
@@ -158,7 +166,7 @@
       "title": "Base Intent Revision",
       "type": "string"
     },
-    "before_scene_id": {
+    "before_chapter_id": {
       "anyOf": [
         {
           "format": "uuid",
@@ -169,7 +177,7 @@
         }
       ],
       "default": null,
-      "title": "Before Scene Id"
+      "title": "Before Chapter Id"
     },
     "closed_at": {
       "anyOf": [
@@ -212,6 +220,10 @@
       "default": null,
       "title": "Location Entity Id"
     },
+    "mode": {
+      "$ref": "#/$defs/WritingSessionMode",
+      "default": "create"
+    },
     "pov_entity_id": {
       "anyOf": [
         {
@@ -231,17 +243,9 @@
       "type": "string"
     },
     "required_chapter_heading": {
-      "anyOf": [
-        {
-          "minLength": 1,
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Required Chapter Heading"
+      "minLength": 1,
+      "title": "Required Chapter Heading",
+      "type": "string"
     },
     "schema_version": {
       "const": "1.0.0",
@@ -282,13 +286,23 @@
       "title": "Target Narrative Order",
       "type": "integer"
     },
-    "target_scene_id": {
-      "format": "uuid",
-      "title": "Target Scene Id",
-      "type": "string"
-    },
     "target_story_time": {
       "$ref": "#/$defs/StoryTime"
+    },
+    "target_volume_id": {
+      "format": "uuid",
+      "title": "Target Volume Id",
+      "type": "string"
+    },
+    "target_volume_number": {
+      "minimum": 1,
+      "title": "Target Volume Number",
+      "type": "integer"
+    },
+    "target_volume_title": {
+      "minLength": 1,
+      "title": "Target Volume Title",
+      "type": "string"
     },
     "writing_session_id": {
       "format": "uuid",
@@ -299,12 +313,15 @@
   "required": [
     "writing_session_id",
     "project_id",
-    "target_scene_id",
+    "target_chapter_id",
     "target_document_id",
     "target_document_path",
-    "target_chapter_id",
     "target_chapter_number",
     "target_chapter_title",
+    "target_volume_id",
+    "target_volume_number",
+    "target_volume_title",
+    "required_chapter_heading",
     "target_narrative_order",
     "target_story_time",
     "base_canon_revision",

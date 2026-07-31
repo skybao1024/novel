@@ -1,4 +1,4 @@
-"""Versioned Chapter and navigation-memory contracts."""
+"""Versioned Volume and navigation-memory contracts."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from uuid import UUID
 from pydantic import Field, StringConstraints, field_validator, model_validator
 
 from novel_core._base import VersionedDomainModel
-from novel_core.projects import Document, DocumentKind, Scene, SceneStatus
+from novel_core.projects import Chapter, ChapterStatus, Document, DocumentKind
 
 NonEmptyText = Annotated[str, StringConstraints(min_length=1)]
 Sha256Digest = Annotated[
@@ -91,8 +91,8 @@ class EntityMention(VersionedDomainModel):
         return self
 
 
-class SceneEntityOccurrence(VersionedDomainModel):
-    """One resolved Entity's navigational presence in an approved Scene."""
+class ChapterEntityOccurrence(VersionedDomainModel):
+    """One resolved Entity's navigational presence in an approved Chapter."""
 
     occurrence_id: UUID
     entity_id: UUID
@@ -104,94 +104,94 @@ class SceneEntityOccurrence(VersionedDomainModel):
     @classmethod
     def validate_unique_mentions(cls, value: tuple[UUID, ...]) -> tuple[UUID, ...]:
         if len(value) != len(set(value)):
-            raise ValueError("Scene Entity occurrence mention IDs must be unique")
+            raise ValueError("Chapter Entity occurrence mention IDs must be unique")
         return value
 
 
-class SceneTrace(VersionedDomainModel):
-    """Non-Canon Entity mention and occurrence index for one Scene revision."""
+class ChapterTrace(VersionedDomainModel):
+    """Non-Canon Entity mention and occurrence index for one Chapter revision."""
 
-    scene_trace_id: UUID
-    scene_id: UUID
+    chapter_trace_id: UUID
     chapter_id: UUID
+    volume_id: UUID
     source_document_id: UUID
     source_revision: Sha256Digest
     mentions: Annotated[tuple[EntityMention, ...], Field(max_length=512)] = ()
     entity_occurrences: Annotated[
-        tuple[SceneEntityOccurrence, ...],
+        tuple[ChapterEntityOccurrence, ...],
         Field(max_length=256),
     ] = ()
     scan_notes: TextTuple = ()
 
     @model_validator(mode="after")
-    def validate_trace(self) -> SceneTrace:
+    def validate_trace(self) -> ChapterTrace:
         mention_ids = tuple(item.mention_id for item in self.mentions)
         mention_ordinals = tuple(item.mention_ordinal for item in self.mentions)
         spans = tuple((item.start_offset, item.end_offset) for item in self.mentions)
         if len(mention_ids) != len(set(mention_ids)):
-            raise ValueError("Scene Trace mention IDs must be unique")
+            raise ValueError("Chapter Trace mention IDs must be unique")
         if mention_ordinals != tuple(range(1, len(self.mentions) + 1)):
-            raise ValueError("Scene Trace mention ordinals must be contiguous and ordered")
+            raise ValueError("Chapter Trace mention ordinals must be contiguous and ordered")
         if len(spans) != len(set(spans)):
-            raise ValueError("Scene Trace Mention spans must be unique")
+            raise ValueError("Chapter Trace Mention spans must be unique")
         if any(
             mention.resolution_status is EntityResolutionStatus.AMBIGUOUS
             for mention in self.mentions
         ):
-            raise ValueError("published Scene Trace cannot contain ambiguous Entity Mentions")
+            raise ValueError("published Chapter Trace cannot contain ambiguous Entity Mentions")
 
         occurrence_ids = tuple(item.occurrence_id for item in self.entity_occurrences)
         occurrence_entity_ids = tuple(item.entity_id for item in self.entity_occurrences)
         if len(occurrence_ids) != len(set(occurrence_ids)):
-            raise ValueError("Scene Trace occurrence IDs must be unique")
+            raise ValueError("Chapter Trace occurrence IDs must be unique")
         if len(occurrence_entity_ids) != len(set(occurrence_entity_ids)):
-            raise ValueError("Scene Trace can contain only one occurrence per Entity")
+            raise ValueError("Chapter Trace can contain only one occurrence per Entity")
 
         known_mentions = set(mention_ids)
         linked_mentions: list[UUID] = []
         for occurrence in self.entity_occurrences:
             unknown = set(occurrence.mention_ids) - known_mentions
             if unknown:
-                raise ValueError("Scene Entity occurrence references unknown Mention IDs")
+                raise ValueError("Chapter Entity occurrence references unknown Mention IDs")
             linked_mentions.extend(occurrence.mention_ids)
             for mention_id in occurrence.mention_ids:
                 mention = next(item for item in self.mentions if item.mention_id == mention_id)
                 if mention.resolved_entity_id != occurrence.entity_id:
-                    raise ValueError("Scene occurrence Entity must match its resolved Mentions")
+                    raise ValueError("Chapter occurrence Entity must match its resolved Mentions")
         if len(linked_mentions) != len(set(linked_mentions)):
-            raise ValueError("resolved Entity Mention can belong to only one Scene occurrence")
+            raise ValueError("resolved Entity Mention can belong to only one Chapter occurrence")
         resolved_mentions = {
             mention.mention_id
             for mention in self.mentions
             if mention.resolved_entity_id is not None
         }
         if set(linked_mentions) != resolved_mentions:
-            raise ValueError("every resolved Entity Mention must belong to one Scene occurrence")
+            raise ValueError("every resolved Entity Mention must belong to one Chapter occurrence")
         return self
 
 
-class Chapter(VersionedDomainModel):
-    """An explicit, stable Chapter boundary over existing Scene IDs."""
+class Volume(VersionedDomainModel):
+    """An explicit, stable Volume boundary over existing Chapter IDs."""
 
-    chapter_id: UUID
-    chapter_number: int = Field(ge=1)
+    volume_id: UUID
+    volume_number: int = Field(ge=1)
     title: NonEmptyText
-    scene_ids: Annotated[tuple[UUID, ...], Field(min_length=1)]
+    chapter_ids: Annotated[tuple[UUID, ...], Field(min_length=1)]
 
-    @field_validator("scene_ids")
+    @field_validator("chapter_ids")
     @classmethod
-    def validate_unique_scene_ids(cls, value: tuple[UUID, ...]) -> tuple[UUID, ...]:
+    def validate_unique_chapter_ids(cls, value: tuple[UUID, ...]) -> tuple[UUID, ...]:
         if len(value) != len(set(value)):
-            raise ValueError("chapter scene_ids must be unique")
+            raise ValueError("volume chapter_ids must be unique")
         return value
 
 
-class SceneSummary(VersionedDomainModel):
-    """Non-Canon navigation memory for one approved Scene revision."""
+class ChapterSummary(VersionedDomainModel):
+    """Non-Canon navigation memory for one approved Chapter revision."""
 
-    scene_id: UUID
     chapter_id: UUID
-    scene_number_in_chapter: int = Field(ge=1)
+    volume_id: UUID
+    chapter_number_in_volume: int = Field(ge=1)
     source_document_id: UUID
     source_revision: Sha256Digest
     summary: NonEmptyText
@@ -214,29 +214,29 @@ class SceneSummary(VersionedDomainModel):
         return value
 
 
-class SceneSummaryDependency(VersionedDomainModel):
-    """The exact Scene Summary revision consumed by a Chapter Summary."""
+class ChapterSummaryDependency(VersionedDomainModel):
+    """The exact Chapter Summary revision consumed by a Volume Summary."""
 
-    scene_id: UUID
+    chapter_id: UUID
     source_revision: Sha256Digest
     summary_digest: Sha256Digest
 
 
-class ChapterSummary(VersionedDomainModel):
-    """Non-Canon aggregation over one Chapter's Scene Summaries."""
+class VolumeSummary(VersionedDomainModel):
+    """Non-Canon aggregation over one Volume's Chapter Summaries."""
 
-    chapter_id: UUID
-    chapter_number: int = Field(ge=1)
+    volume_id: UUID
+    volume_number: int = Field(ge=1)
     title: NonEmptyText
-    scene_ids: Annotated[tuple[UUID, ...], Field(min_length=1)]
-    scene_summary_dependencies: Annotated[
-        tuple[SceneSummaryDependency, ...],
+    chapter_ids: Annotated[tuple[UUID, ...], Field(min_length=1)]
+    chapter_summary_dependencies: Annotated[
+        tuple[ChapterSummaryDependency, ...],
         Field(min_length=1),
     ]
     summary: NonEmptyText
     main_entity_ids: IdTuple = ()
 
-    @field_validator("scene_ids", "main_entity_ids")
+    @field_validator("chapter_ids", "main_entity_ids")
     @classmethod
     def validate_unique_ids(cls, value: tuple[UUID, ...]) -> tuple[UUID, ...]:
         if len(value) != len(set(value)):
@@ -244,30 +244,37 @@ class ChapterSummary(VersionedDomainModel):
         return value
 
     @model_validator(mode="after")
-    def validate_dependencies(self) -> ChapterSummary:
-        dependency_ids = tuple(item.scene_id for item in self.scene_summary_dependencies)
-        if dependency_ids != self.scene_ids:
-            raise ValueError("chapter summary dependencies must match scene_ids in the same order")
+    def validate_dependencies(self) -> VolumeSummary:
+        dependency_ids = tuple(item.chapter_id for item in self.chapter_summary_dependencies)
+        if dependency_ids != self.chapter_ids:
+            raise ValueError("volume summary dependencies must match chapter_ids in the same order")
         return self
 
 
-def scene_summary_digest(summary: SceneSummary) -> str:
-    """Return the stable digest consumed by a Chapter Summary."""
+def chapter_summary_digest(summary: ChapterSummary) -> str:
+    """Return the stable digest consumed by a Volume Summary."""
 
     return f"sha256:{sha256(summary.to_canonical_json().encode('utf-8')).hexdigest()}"
 
 
-def scene_trace_digest(trace: SceneTrace) -> str:
+def chapter_trace_digest(trace: ChapterTrace) -> str:
     """Return the stable digest used as a Trace Backfill base."""
 
     return f"sha256:{sha256(trace.to_canonical_json().encode('utf-8')).hexdigest()}"
 
 
-def validate_chapter_bindings(
+def validate_volume_bindings(
+    volumes: tuple[Volume, ...],
     chapters: tuple[Chapter, ...],
-    scenes: tuple[Scene, ...],
 ) -> None:
-    """Validate explicit Chapter boundaries without inferring them from paths."""
+    """Validate explicit Volume boundaries without inferring them from paths."""
+
+    volume_ids = [volume.volume_id for volume in volumes]
+    if len(volume_ids) != len(set(volume_ids)):
+        raise ValueError("volume_id must be unique")
+    volume_numbers = [volume.volume_number for volume in volumes]
+    if len(volume_numbers) != len(set(volume_numbers)):
+        raise ValueError("volume_number must be unique")
 
     chapter_ids = [chapter.chapter_id for chapter in chapters]
     if len(chapter_ids) != len(set(chapter_ids)):
@@ -275,104 +282,107 @@ def validate_chapter_bindings(
     chapter_numbers = [chapter.chapter_number for chapter in chapters]
     if len(chapter_numbers) != len(set(chapter_numbers)):
         raise ValueError("chapter_number must be unique")
+    narrative_orders = [chapter.narrative_order for chapter in chapters]
+    if len(narrative_orders) != len(set(narrative_orders)):
+        raise ValueError("Chapter Narrative Order must be unique")
 
-    scenes_by_id = {scene.scene_id: scene for scene in scenes}
-    assigned_scene_ids: set[UUID] = set()
-    for chapter in chapters:
-        chapter_orders: list[int] = []
-        for scene_id in chapter.scene_ids:
-            if scene_id in assigned_scene_ids:
-                raise ValueError(f"scene belongs to more than one Chapter: {scene_id}")
-            scene = scenes_by_id.get(scene_id)
-            if scene is None:
-                raise ValueError(f"chapter references an unknown Scene: {scene_id}")
-            if scene.chapter_id is not None and scene.chapter_id != chapter.chapter_id:
+    chapters_by_id = {chapter.chapter_id: chapter for chapter in chapters}
+    assigned_chapter_ids: set[UUID] = set()
+    for volume in volumes:
+        volume_orders: list[int] = []
+        for chapter_id in volume.chapter_ids:
+            if chapter_id in assigned_chapter_ids:
+                raise ValueError(f"chapter belongs to more than one Volume: {chapter_id}")
+            chapter = chapters_by_id.get(chapter_id)
+            if chapter is None:
+                raise ValueError(f"volume references an unknown Chapter: {chapter_id}")
+            if chapter.volume_id is not None and chapter.volume_id != volume.volume_id:
                 raise ValueError(
-                    f"scene {scene_id} is bound to another Chapter: {scene.chapter_id}"
+                    f"chapter {chapter_id} is bound to another Volume: {chapter.volume_id}"
                 )
-            assigned_scene_ids.add(scene_id)
-            chapter_orders.append(scene.narrative_order)
-        if chapter_orders != sorted(chapter_orders):
-            raise ValueError(f"chapter {chapter.chapter_id} scene_ids are not in Narrative Order")
-
-
-def scene_summary_is_stale(
-    summary: SceneSummary,
-    *,
-    chapter: Chapter,
-    scene: Scene,
-    document: Document,
-) -> bool:
-    """Return whether a structurally valid Scene Summary is no longer current."""
-
-    try:
-        scene_number = chapter.scene_ids.index(scene.scene_id) + 1
-    except ValueError as exc:
-        raise ValueError(f"scene is not part of Chapter {chapter.chapter_id}") from exc
-    if summary.chapter_id != chapter.chapter_id or summary.scene_id != scene.scene_id:
-        raise ValueError("Scene Summary does not match its Chapter and Scene")
-    if summary.scene_number_in_chapter != scene_number:
-        raise ValueError("Scene Summary has the wrong scene_number_in_chapter")
-    if summary.source_document_id != document.document_id:
-        raise ValueError("Scene Summary source_document_id does not match the Scene")
-    if scene.source_document_id != document.document_id:
-        raise ValueError("Scene source_document_id does not match the Document")
-    if scene.status is not SceneStatus.APPROVED:
-        raise ValueError("Scene Summary can only describe an approved Scene")
-    if document.document_kind is not DocumentKind.MANUSCRIPT:
-        raise ValueError("Scene Summary can only describe a manuscript Document")
-    return summary.source_revision != document.revision or scene.revision != document.revision
-
-
-def scene_trace_is_stale(
-    trace: SceneTrace,
-    *,
-    chapter: Chapter,
-    scene: Scene,
-    document: Document,
-) -> bool:
-    """Return whether a structurally valid Scene Trace no longer matches its Scene."""
-
-    if trace.chapter_id != chapter.chapter_id or trace.scene_id != scene.scene_id:
-        raise ValueError("Scene Trace does not match its Chapter and Scene")
-    if scene.scene_id not in chapter.scene_ids:
-        raise ValueError("Scene Trace Scene is not part of its Chapter")
-    if trace.source_document_id != document.document_id:
-        raise ValueError("Scene Trace source Document does not match the Scene")
-    if scene.source_document_id != document.document_id:
-        raise ValueError("Scene source Document does not match the Scene Trace")
-    if scene.status is not SceneStatus.APPROVED:
-        raise ValueError("Scene Trace can only describe an approved Scene")
-    if document.document_kind is not DocumentKind.MANUSCRIPT:
-        raise ValueError("Scene Trace can only describe a manuscript Document")
-    return trace.source_revision != document.revision or scene.revision != document.revision
+            assigned_chapter_ids.add(chapter_id)
+            volume_orders.append(chapter.narrative_order)
+        if volume_orders != sorted(volume_orders):
+            raise ValueError(f"volume {volume.volume_id} chapter_ids are not in Narrative Order")
 
 
 def chapter_summary_is_stale(
     summary: ChapterSummary,
     *,
+    volume: Volume,
     chapter: Chapter,
-    scene_summaries: dict[UUID, SceneSummary],
-    stale_scene_ids: set[UUID],
+    document: Document,
 ) -> bool:
-    """Return whether Chapter metadata or any consumed Scene Summary changed."""
+    """Return whether a structurally valid Chapter Summary is no longer current."""
 
-    if summary.chapter_id != chapter.chapter_id:
-        raise ValueError("Chapter Summary does not match its Chapter")
+    try:
+        chapter_number = volume.chapter_ids.index(chapter.chapter_id) + 1
+    except ValueError as exc:
+        raise ValueError(f"chapter is not part of Volume {volume.volume_id}") from exc
+    if summary.volume_id != volume.volume_id or summary.chapter_id != chapter.chapter_id:
+        raise ValueError("Chapter Summary does not match its Volume and Chapter")
+    if summary.chapter_number_in_volume != chapter_number:
+        raise ValueError("Chapter Summary has the wrong chapter_number_in_volume")
+    if summary.source_document_id != document.document_id:
+        raise ValueError("Chapter Summary source_document_id does not match the Chapter")
+    if chapter.source_document_id != document.document_id:
+        raise ValueError("Chapter source_document_id does not match the Document")
+    if chapter.status is not ChapterStatus.APPROVED:
+        raise ValueError("Chapter Summary can only describe an approved Chapter")
+    if document.document_kind is not DocumentKind.MANUSCRIPT:
+        raise ValueError("Chapter Summary can only describe a manuscript Document")
+    return summary.source_revision != document.revision or chapter.revision != document.revision
+
+
+def chapter_trace_is_stale(
+    trace: ChapterTrace,
+    *,
+    volume: Volume,
+    chapter: Chapter,
+    document: Document,
+) -> bool:
+    """Return whether a structurally valid Chapter Trace no longer matches its Chapter."""
+
+    if trace.volume_id != volume.volume_id or trace.chapter_id != chapter.chapter_id:
+        raise ValueError("Chapter Trace does not match its Volume and Chapter")
+    if chapter.chapter_id not in volume.chapter_ids:
+        raise ValueError("Chapter Trace Chapter is not part of its Volume")
+    if trace.source_document_id != document.document_id:
+        raise ValueError("Chapter Trace source Document does not match the Chapter")
+    if chapter.source_document_id != document.document_id:
+        raise ValueError("Chapter source Document does not match the Chapter Trace")
+    if chapter.status is not ChapterStatus.APPROVED:
+        raise ValueError("Chapter Trace can only describe an approved Chapter")
+    if document.document_kind is not DocumentKind.MANUSCRIPT:
+        raise ValueError("Chapter Trace can only describe a manuscript Document")
+    return trace.source_revision != document.revision or chapter.revision != document.revision
+
+
+def volume_summary_is_stale(
+    summary: VolumeSummary,
+    *,
+    volume: Volume,
+    chapter_summaries: dict[UUID, ChapterSummary],
+    stale_chapter_ids: set[UUID],
+) -> bool:
+    """Return whether Volume metadata or any consumed Chapter Summary changed."""
+
+    if summary.volume_id != volume.volume_id:
+        raise ValueError("Volume Summary does not match its Volume")
     if (
-        summary.chapter_number != chapter.chapter_number
-        or summary.title != chapter.title
-        or summary.scene_ids != chapter.scene_ids
+        summary.volume_number != volume.volume_number
+        or summary.title != volume.title
+        or summary.chapter_ids != volume.chapter_ids
     ):
         return True
 
-    for dependency in summary.scene_summary_dependencies:
-        scene_summary = scene_summaries.get(dependency.scene_id)
-        if scene_summary is None or dependency.scene_id in stale_scene_ids:
+    for dependency in summary.chapter_summary_dependencies:
+        chapter_summary = chapter_summaries.get(dependency.chapter_id)
+        if chapter_summary is None or dependency.chapter_id in stale_chapter_ids:
             return True
         if (
-            dependency.source_revision != scene_summary.source_revision
-            or dependency.summary_digest != scene_summary_digest(scene_summary)
+            dependency.source_revision != chapter_summary.source_revision
+            or dependency.summary_digest != chapter_summary_digest(chapter_summary)
         ):
             return True
     return False

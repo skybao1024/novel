@@ -19,18 +19,21 @@ from novel_adapters.filesystem import (
 from novel_adapters.sqlite import SQLiteProjectionQueries, SQLiteProjectionStore
 from novel_application import (
     CanonQueryService,
+    ChapterHistoryAccessError,
     ManuscriptReadError,
     NavigationMemoryService,
     NavigationMemoryWriter,
     ProjectService,
-    SceneHistoryAccessError,
 )
 from novel_cli.main import EXIT_OK, main
 from novel_core import (
     EMPTY_CANON_REVISION,
     CanonLedgerEntry,
     Chapter,
+    ChapterLedgerRecord,
+    ChapterStatus,
     ChapterSummary,
+    ChapterSummaryDependency,
     Document,
     DocumentKind,
     DocumentLedgerRecord,
@@ -38,26 +41,23 @@ from novel_core import (
     EntityLedgerRecord,
     EntityStatus,
     ProjectManifest,
-    Scene,
-    SceneLedgerRecord,
-    SceneStatus,
-    SceneSummary,
-    SceneSummaryDependency,
     SourceRef,
     SourceRefLedgerRecord,
     StoryTime,
     StoryTimeKind,
+    Volume,
+    VolumeSummary,
+    chapter_summary_digest,
     manuscript_revision,
-    scene_summary_digest,
 )
 
 CHARACTER_ID = UUID("71000000-0000-4000-8000-000000000001")
 CHAPTER_ONE = UUID("72000000-0000-4000-8000-000000000001")
 CHAPTER_TWO = UUID("72000000-0000-4000-8000-000000000002")
 CHAPTER_THREE = UUID("72000000-0000-4000-8000-000000000003")
-SCENE_ONE = UUID("73000000-0000-4000-8000-000000000001")
-SCENE_TWO = UUID("73000000-0000-4000-8000-000000000002")
-SCENE_THREE = UUID("73000000-0000-4000-8000-000000000003")
+CHAPTER_ID_ONE = UUID("73000000-0000-4000-8000-000000000001")
+CHAPTER_ID_TWO = UUID("73000000-0000-4000-8000-000000000002")
+CHAPTER_ID_THREE = UUID("73000000-0000-4000-8000-000000000003")
 DOCUMENT_ONE = UUID("74000000-0000-4000-8000-000000000001")
 DOCUMENT_TWO = UUID("74000000-0000-4000-8000-000000000002")
 DOCUMENT_THREE = UUID("74000000-0000-4000-8000-000000000003")
@@ -87,13 +87,13 @@ def memory_case(tmp_path: Path) -> dict[str, object]:
         "manuscript/卷一/第三章-黎明.md",
     )
     document_ids = (DOCUMENT_ONE, DOCUMENT_TWO, DOCUMENT_THREE)
-    scene_ids = (SCENE_ONE, SCENE_TWO, SCENE_THREE)
-    chapter_ids = (None, CHAPTER_TWO, CHAPTER_THREE)
+    chapter_ids = (CHAPTER_ID_ONE, CHAPTER_ID_TWO, CHAPTER_ID_THREE)
+    volume_ids = (None, CHAPTER_TWO, CHAPTER_THREE)
 
     documents: list[Document] = []
-    scenes: list[Scene] = []
-    for order, (content, relative_path, document_id, scene_id, chapter_id) in enumerate(
-        zip(contents, paths, document_ids, scene_ids, chapter_ids, strict=True),
+    chapters: list[Chapter] = []
+    for order, (content, relative_path, document_id, chapter_id, volume_id) in enumerate(
+        zip(contents, paths, document_ids, chapter_ids, volume_ids, strict=True),
         start=1,
     ):
         path = root / relative_path
@@ -106,9 +106,11 @@ def memory_case(tmp_path: Path) -> dict[str, object]:
             document_kind=DocumentKind.MANUSCRIPT,
             revision=revision,
         )
-        scene = Scene(
-            scene_id=scene_id,
+        chapter = Chapter(
             chapter_id=chapter_id,
+            volume_id=volume_id,
+            chapter_number=order,
+            title=f"第 {order} 章",
             narrative_order=order,
             story_time=StoryTime(
                 timeline_id="main",
@@ -117,37 +119,37 @@ def memory_case(tmp_path: Path) -> dict[str, object]:
                 display_time=f"旧历第 {order * 10} 日",
             ),
             pov_entity_id=CHARACTER_ID,
-            status=SceneStatus.APPROVED,
+            status=ChapterStatus.APPROVED,
             source_document_id=document_id,
             revision=revision,
         )
         documents.append(document)
-        scenes.append(scene)
+        chapters.append(chapter)
 
-    chapters = (
-        Chapter(
-            chapter_id=CHAPTER_ONE,
-            chapter_number=1,
+    volumes = (
+        Volume(
+            volume_id=CHAPTER_ONE,
+            volume_number=1,
             title="霜夜",
-            scene_ids=(SCENE_ONE,),
+            chapter_ids=(CHAPTER_ID_ONE,),
         ),
-        Chapter(
-            chapter_id=CHAPTER_TWO,
-            chapter_number=2,
+        Volume(
+            volume_id=CHAPTER_TWO,
+            volume_number=2,
             title="旧誓",
-            scene_ids=(SCENE_TWO,),
+            chapter_ids=(CHAPTER_ID_TWO,),
         ),
-        Chapter(
-            chapter_id=CHAPTER_THREE,
-            chapter_number=3,
+        Volume(
+            volume_id=CHAPTER_THREE,
+            volume_number=3,
             title="黎明",
-            scene_ids=(SCENE_THREE,),
+            chapter_ids=(CHAPTER_ID_THREE,),
         ),
     )
-    scene_one_summary = SceneSummary(
-        scene_id=SCENE_ONE,
-        chapter_id=CHAPTER_ONE,
-        scene_number_in_chapter=1,
+    chapter_one_summary = ChapterSummary(
+        chapter_id=CHAPTER_ID_ONE,
+        volume_id=CHAPTER_ONE,
+        chapter_number_in_volume=1,
         source_document_id=DOCUMENT_ONE,
         source_revision=documents[0].revision,
         summary="顾宁在北塔发现银戒秘密。",
@@ -155,25 +157,25 @@ def memory_case(tmp_path: Path) -> dict[str, object]:
         key_changes=("发现银戒",),
         open_questions=("银戒来自何处？",),
     )
-    scene_three_summary = SceneSummary(
-        scene_id=SCENE_THREE,
-        chapter_id=CHAPTER_THREE,
-        scene_number_in_chapter=1,
+    chapter_three_summary = ChapterSummary(
+        chapter_id=CHAPTER_ID_THREE,
+        volume_id=CHAPTER_THREE,
+        chapter_number_in_volume=1,
         source_document_id=DOCUMENT_THREE,
         source_revision=documents[2].revision,
         summary="顾宁将在黎明追查银戒来源。",
         main_entity_ids=(CHARACTER_ID,),
     )
-    chapter_one_summary = ChapterSummary(
-        chapter_id=CHAPTER_ONE,
-        chapter_number=1,
+    volume_one_summary = VolumeSummary(
+        volume_id=CHAPTER_ONE,
+        volume_number=1,
         title="霜夜",
-        scene_ids=(SCENE_ONE,),
-        scene_summary_dependencies=(
-            SceneSummaryDependency(
-                scene_id=SCENE_ONE,
-                source_revision=scene_one_summary.source_revision,
-                summary_digest=scene_summary_digest(scene_one_summary),
+        chapter_ids=(CHAPTER_ID_ONE,),
+        chapter_summary_dependencies=(
+            ChapterSummaryDependency(
+                chapter_id=CHAPTER_ID_ONE,
+                source_revision=chapter_one_summary.source_revision,
+                summary_digest=chapter_summary_digest(chapter_one_summary),
             ),
         ),
         summary="顾宁在霜夜获得银戒线索。",
@@ -190,7 +192,7 @@ def memory_case(tmp_path: Path) -> dict[str, object]:
     source_ref = SourceRef(
         source_ref_id=UUID("77000000-0000-4000-8000-000000000001"),
         document_id=DOCUMENT_ONE,
-        scene_id=SCENE_ONE,
+        chapter_id=CHAPTER_ID_ONE,
         document_revision=documents[0].revision,
         fragment_ordinal=1,
         quote_hash=sha256(excerpt.encode("utf-8")).hexdigest(),
@@ -205,7 +207,7 @@ def memory_case(tmp_path: Path) -> dict[str, object]:
             records=(
                 EntityLedgerRecord(value=character),
                 *(DocumentLedgerRecord(value=document) for document in documents),
-                *(SceneLedgerRecord(value=scene) for scene in scenes),
+                *(ChapterLedgerRecord(value=chapter) for chapter in chapters),
                 SourceRefLedgerRecord(value=source_ref),
             ),
         )
@@ -222,11 +224,11 @@ def memory_case(tmp_path: Path) -> dict[str, object]:
         projection=SQLiteProjectionStore(root),
         write_lock=FilesystemProjectWriteLock(root),
     )
-    for chapter in chapters:
-        writer.save_chapter(chapter)
-    writer.save_scene_summary(scene_one_summary)
-    writer.save_scene_summary(scene_three_summary)
+    for volume in volumes:
+        writer.save_volume(volume)
     writer.save_chapter_summary(chapter_one_summary)
+    writer.save_chapter_summary(chapter_three_summary)
+    writer.save_volume_summary(volume_one_summary)
     memory = NavigationMemoryService(
         navigation=projection,
         canon=canon,
@@ -240,106 +242,106 @@ def memory_case(tmp_path: Path) -> dict[str, object]:
         "memory": memory,
         "documents": tuple(documents),
         "contents": contents,
-        "scene_one_summary": scene_one_summary,
+        "chapter_one_summary": chapter_one_summary,
     }
 
 
-def test_chapter_and_summary_contracts_are_strict_frozen_and_round_trip() -> None:
-    chapter = Chapter(
-        chapter_id=CHAPTER_ONE,
-        chapter_number=1,
+def test_volume_and_summary_contracts_are_strict_frozen_and_round_trip() -> None:
+    volume = Volume(
+        volume_id=CHAPTER_ONE,
+        volume_number=1,
         title="霜夜",
-        scene_ids=(SCENE_ONE,),
+        chapter_ids=(CHAPTER_ID_ONE,),
     )
-    summary = SceneSummary(
-        scene_id=SCENE_ONE,
-        chapter_id=CHAPTER_ONE,
-        scene_number_in_chapter=1,
+    summary = ChapterSummary(
+        chapter_id=CHAPTER_ID_ONE,
+        volume_id=CHAPTER_ONE,
+        chapter_number_in_volume=1,
         source_document_id=DOCUMENT_ONE,
-        source_revision=f"sha256:{sha256(b'scene').hexdigest()}",
+        source_revision=f"sha256:{sha256(b'chapter').hexdigest()}",
         summary="顾宁发现银戒。",
     )
-    dependency = SceneSummaryDependency(
-        scene_id=SCENE_ONE,
+    dependency = ChapterSummaryDependency(
+        chapter_id=CHAPTER_ID_ONE,
         source_revision=summary.source_revision,
-        summary_digest=scene_summary_digest(summary),
+        summary_digest=chapter_summary_digest(summary),
     )
-    chapter_summary = ChapterSummary(
-        chapter_id=CHAPTER_ONE,
-        chapter_number=1,
+    volume_summary = VolumeSummary(
+        volume_id=CHAPTER_ONE,
+        volume_number=1,
         title="霜夜",
-        scene_ids=(SCENE_ONE,),
-        scene_summary_dependencies=(dependency,),
+        chapter_ids=(CHAPTER_ID_ONE,),
+        chapter_summary_dependencies=(dependency,),
         summary="银戒之谜开始。",
     )
 
-    for model in (chapter, summary, dependency, chapter_summary):
+    for model in (volume, summary, dependency, volume_summary):
         restored = type(model).from_json(model.to_canonical_json())
         assert restored == model
         assert restored.to_canonical_json() == model.to_canonical_json()
 
     with pytest.raises(ValidationError, match="frozen"):
-        chapter.title = "被修改"
+        volume.title = "被修改"
     with pytest.raises(ValidationError):
-        Chapter(
-            chapter_id=CHAPTER_ONE,
-            chapter_number=0,
+        Volume(
+            volume_id=CHAPTER_ONE,
+            volume_number=0,
             title="非法",
-            scene_ids=(SCENE_ONE,),
+            chapter_ids=(CHAPTER_ID_ONE,),
         )
     with pytest.raises(ValidationError, match="unique"):
-        Chapter(
-            chapter_id=CHAPTER_ONE,
-            chapter_number=1,
+        Volume(
+            volume_id=CHAPTER_ONE,
+            volume_number=1,
             title="重复",
-            scene_ids=(SCENE_ONE, SCENE_ONE),
+            chapter_ids=(CHAPTER_ID_ONE, CHAPTER_ID_ONE),
         )
     with pytest.raises(ValidationError, match="same order"):
-        ChapterSummary(
-            chapter_id=CHAPTER_ONE,
-            chapter_number=1,
+        VolumeSummary(
+            volume_id=CHAPTER_ONE,
+            volume_number=1,
             title="霜夜",
-            scene_ids=(SCENE_ONE,),
-            scene_summary_dependencies=(
-                SceneSummaryDependency(
-                    scene_id=SCENE_TWO,
+            chapter_ids=(CHAPTER_ID_ONE,),
+            chapter_summary_dependencies=(
+                ChapterSummaryDependency(
+                    chapter_id=CHAPTER_ID_TWO,
                     source_revision=summary.source_revision,
-                    summary_digest=scene_summary_digest(summary),
+                    summary_digest=chapter_summary_digest(summary),
                 ),
             ),
             summary="依赖错误。",
         )
 
 
-def test_explicit_chapter_binding_lists_summaries_without_guessing_paths(
+def test_explicit_volume_binding_lists_summaries_without_guessing_paths(
     memory_case: dict[str, object],
 ) -> None:
     memory = memory_case["memory"]
-    chapters = memory.chapters()
-    scenes = memory.scenes(CHAPTER_ONE)
-    missing = memory.scenes(CHAPTER_TWO)
+    volumes = memory.volumes()
+    chapters = memory.chapters(CHAPTER_ONE)
+    missing = memory.chapters(CHAPTER_TWO)
 
-    assert [item.chapter.title for item in chapters] == ["霜夜", "旧誓", "黎明"]
+    assert [item.volume.title for item in volumes] == ["霜夜", "旧誓", "黎明"]
+    assert volumes[0].summary is not None
+    assert volumes[1].summary is None
+    assert chapters[0].chapter.volume_id is None
+    assert chapters[0].chapter_number_in_volume == 1
     assert chapters[0].summary is not None
-    assert chapters[1].summary is None
-    assert scenes[0].scene.chapter_id is None
-    assert scenes[0].scene_number_in_chapter == 1
-    assert scenes[0].summary is not None
     assert missing[0].summary is None
     assert missing[0].stale is None
 
 
-def test_stale_scene_revision_propagates_to_chapter_summary(
+def test_stale_chapter_revision_propagates_to_volume_summary(
     memory_case: dict[str, object],
 ) -> None:
     navigation = memory_case["navigation"]
-    current = memory_case["scene_one_summary"]
+    current = memory_case["chapter_one_summary"]
     stale = current.model_copy(
         update={"source_revision": f"sha256:{sha256(b'old revision').hexdigest()}"}
     )
-    with pytest.raises(SceneHistoryAccessError, match="current approved"):
-        memory_case["writer"].save_scene_summary(stale)
-    navigation.save_scene_summary(stale)
+    with pytest.raises(ChapterHistoryAccessError, match="current approved"):
+        memory_case["writer"].save_chapter_summary(stale)
+    navigation.save_chapter_summary(stale)
     memory_case["projects"].ensure_projection_current()
 
     projection = SQLiteProjectionQueries(memory_case["root"])
@@ -348,19 +350,19 @@ def test_stale_scene_revision_propagates_to_chapter_summary(
         canon=CanonQueryService(projection),
         manuscripts=FilesystemManuscriptStore(memory_case["root"]),
     )
-    chapter = memory.chapters()[0]
-    scene = memory.scenes(CHAPTER_ONE)[0]
+    volume = memory.volumes()[0]
+    chapter = memory.chapters(CHAPTER_ONE)[0]
 
-    assert scene.stale is True
     assert chapter.stale is True
-    assert scene.summary.source_revision != memory_case["documents"][0].revision
+    assert volume.stale is True
+    assert chapter.summary.source_revision != memory_case["documents"][0].revision
 
 
-def test_changed_scene_summary_digest_stales_only_dependent_chapter(
+def test_changed_chapter_summary_digest_stales_only_dependent_volume(
     memory_case: dict[str, object],
 ) -> None:
-    current = memory_case["scene_one_summary"]
-    memory_case["writer"].save_scene_summary(
+    current = memory_case["chapter_one_summary"]
+    memory_case["writer"].save_chapter_summary(
         current.model_copy(update={"summary": "顾宁确认银戒刻有陌生铭文。"})
     )
 
@@ -371,37 +373,37 @@ def test_changed_scene_summary_digest_stales_only_dependent_chapter(
         manuscripts=FilesystemManuscriptStore(memory_case["root"]),
     )
 
-    assert memory.scenes(CHAPTER_ONE)[0].stale is False
-    assert memory.chapters()[0].stale is True
+    assert memory.chapters(CHAPTER_ONE)[0].stale is False
+    assert memory.volumes()[0].stale is True
 
 
-def test_exact_read_ignores_missing_summary_and_blocks_wrong_or_future_scene(
+def test_exact_read_ignores_missing_summary_and_blocks_wrong_or_future_chapter(
     memory_case: dict[str, object],
 ) -> None:
     memory = memory_case["memory"]
-    exact = memory.read_scene(
-        chapter_id=CHAPTER_TWO,
-        scene_id=SCENE_TWO,
-        before_scene_id=SCENE_THREE,
+    exact = memory.read_chapter(
+        volume_id=CHAPTER_TWO,
+        chapter_id=CHAPTER_ID_TWO,
+        before_chapter_id=CHAPTER_ID_THREE,
     )
 
     assert exact.text == memory_case["contents"][1].decode("utf-8")
     assert exact.document.revision == manuscript_revision(memory_case["contents"][1])
-    assert exact.scene.story_time.story_time_start == 20
-    assert exact.scene.narrative_order == 2
-    assert exact.scene.pov_entity_id == CHARACTER_ID
+    assert exact.chapter.story_time.story_time_start == 20
+    assert exact.chapter.narrative_order == 2
+    assert exact.chapter.pov_entity_id == CHARACTER_ID
 
-    with pytest.raises(SceneHistoryAccessError, match="does not belong"):
-        memory.read_scene(
-            chapter_id=CHAPTER_TWO,
-            scene_id=SCENE_ONE,
-            before_scene_id=SCENE_THREE,
+    with pytest.raises(ChapterHistoryAccessError, match="does not belong"):
+        memory.read_chapter(
+            volume_id=CHAPTER_TWO,
+            chapter_id=CHAPTER_ID_ONE,
+            before_chapter_id=CHAPTER_ID_THREE,
         )
-    with pytest.raises(SceneHistoryAccessError, match="before"):
-        memory.read_scene(
-            chapter_id=CHAPTER_THREE,
-            scene_id=SCENE_THREE,
-            before_scene_id=SCENE_THREE,
+    with pytest.raises(ChapterHistoryAccessError, match="before"):
+        memory.read_chapter(
+            volume_id=CHAPTER_THREE,
+            chapter_id=CHAPTER_ID_THREE,
+            before_chapter_id=CHAPTER_ID_THREE,
         )
 
 
@@ -413,10 +415,10 @@ def test_exact_read_rejects_disk_bytes_that_drift_from_approved_revision(
     (root / document.relative_path).write_text("未批准的磁盘修改", encoding="utf-8")
 
     with pytest.raises(ManuscriptReadError, match="revision mismatch"):
-        memory_case["memory"].read_scene(
-            chapter_id=CHAPTER_TWO,
-            scene_id=SCENE_TWO,
-            before_scene_id=SCENE_THREE,
+        memory_case["memory"].read_chapter(
+            volume_id=CHAPTER_TWO,
+            chapter_id=CHAPTER_ID_TWO,
+            before_chapter_id=CHAPTER_ID_THREE,
         )
 
 
@@ -427,12 +429,12 @@ def test_summary_search_returns_only_historical_navigation_candidates(
     hits = memory.search_summaries(
         query="银戒秘密",
         entity_id=CHARACTER_ID,
-        before_scene_id=SCENE_THREE,
+        before_chapter_id=CHAPTER_ID_THREE,
     )
 
     assert len(hits) == 1
-    assert isinstance(hits[0].summary, SceneSummary)
-    assert hits[0].summary.scene_id == SCENE_ONE
+    assert isinstance(hits[0].summary, ChapterSummary)
+    assert hits[0].summary.chapter_id == CHAPTER_ID_ONE
     assert hits[0].retrieval_method.value == "fts5_trigram"
     assert "main_entity_ids contains" in hits[0].match_reason
     assert not hasattr(hits[0], "canon_status")
@@ -441,14 +443,14 @@ def test_summary_search_returns_only_historical_navigation_candidates(
         memory.search_summaries(
             query="隐藏原文词",
             entity_id=None,
-            before_scene_id=SCENE_THREE,
+            before_chapter_id=CHAPTER_ID_THREE,
         )
         == ()
     )
     future = memory.search_summaries(
         query="黎明追查",
         entity_id=None,
-        before_scene_id=SCENE_THREE,
+        before_chapter_id=CHAPTER_ID_THREE,
     )
     assert future == ()
 
@@ -459,11 +461,11 @@ def test_deleted_sqlite_rebuilds_navigation_projection_from_files(
     root = memory_case["root"]
     before = [
         (
-            item.chapter,
+            item.volume,
             item.summary,
             item.stale,
         )
-        for item in memory_case["memory"].chapters()
+        for item in memory_case["memory"].volumes()
     ]
     database = root / ".novel" / "project.sqlite"
     database.unlink()
@@ -477,11 +479,11 @@ def test_deleted_sqlite_rebuilds_navigation_projection_from_files(
         canon=CanonQueryService(projection),
         manuscripts=FilesystemManuscriptStore(root),
     )
-    after = [(item.chapter, item.summary, item.stale) for item in rebuilt.chapters()]
+    after = [(item.volume, item.summary, item.stale) for item in rebuilt.volumes()]
 
     assert after == before
-    assert (root / "structure" / "chapters" / f"{CHAPTER_ONE}.json").is_file()
-    assert (root / "memory" / "scenes" / f"{SCENE_ONE}.json").is_file()
+    assert (root / "structure" / "volumes" / f"{CHAPTER_ONE}.json").is_file()
+    assert (root / "memory" / "chapters" / f"{CHAPTER_ID_ONE}.json").is_file()
 
 
 def test_memory_cli_vertical_slice_uses_one_versioned_json_envelope(
@@ -490,11 +492,11 @@ def test_memory_cli_vertical_slice_uses_one_versioned_json_envelope(
 ) -> None:
     root = memory_case["root"]
 
-    assert main(["--project", str(root), "memory", "chapters", "--json"]) == EXIT_OK
-    chapters = json.loads(capsys.readouterr().out)
-    assert chapters["ok"] is True
-    assert chapters["data"]["schema_version"] == "1.0.0"
-    assert chapters["data"]["chapters"][0]["chapter"]["title"] == "霜夜"
+    assert main(["--project", str(root), "memory", "volumes", "--json"]) == EXIT_OK
+    volumes = json.loads(capsys.readouterr().out)
+    assert volumes["ok"] is True
+    assert volumes["data"]["schema_version"] == "1.0.0"
+    assert volumes["data"]["volumes"][0]["volume"]["title"] == "霜夜"
 
     assert (
         main(
@@ -502,16 +504,16 @@ def test_memory_cli_vertical_slice_uses_one_versioned_json_envelope(
                 "--project",
                 str(root),
                 "memory",
-                "scenes",
-                "--chapter-id",
+                "chapters",
+                "--volume-id",
                 str(CHAPTER_TWO),
                 "--json",
             ]
         )
         == EXIT_OK
     )
-    scenes = json.loads(capsys.readouterr().out)
-    assert scenes["data"]["scenes"][0]["summary"] is None
+    chapters = json.loads(capsys.readouterr().out)
+    assert chapters["data"]["chapters"][0]["summary"] is None
 
     assert (
         main(
@@ -524,15 +526,15 @@ def test_memory_cli_vertical_slice_uses_one_versioned_json_envelope(
                 "银戒秘密",
                 "--entity",
                 str(CHARACTER_ID),
-                "--before-scene",
-                str(SCENE_THREE),
+                "--before-chapter",
+                str(CHAPTER_ID_THREE),
                 "--json",
             ]
         )
         == EXIT_OK
     )
     search = json.loads(capsys.readouterr().out)
-    assert search["data"]["hits"][0]["summary_kind"] == "scene"
+    assert search["data"]["hits"][0]["summary_kind"] == "chapter"
     assert search["data"]["hits"][0]["retrieval_method"] == "fts5_trigram"
 
     assert (
@@ -541,13 +543,13 @@ def test_memory_cli_vertical_slice_uses_one_versioned_json_envelope(
                 "--project",
                 str(root),
                 "memory",
-                "read-scene",
-                "--chapter-id",
+                "read-chapter",
+                "--volume-id",
                 str(CHAPTER_ONE),
-                "--scene-id",
-                str(SCENE_ONE),
-                "--before-scene",
-                str(SCENE_THREE),
+                "--chapter-id",
+                str(CHAPTER_ID_ONE),
+                "--before-chapter",
+                str(CHAPTER_ID_THREE),
                 "--json",
             ]
         )
@@ -555,8 +557,8 @@ def test_memory_cli_vertical_slice_uses_one_versioned_json_envelope(
     )
     exact = json.loads(capsys.readouterr().out)
     assert exact["data"]["text"] == memory_case["contents"][0].decode("utf-8")
-    assert exact["data"]["chapter_id"] == str(CHAPTER_ONE)
-    assert exact["data"]["scene_id"] == str(SCENE_ONE)
+    assert exact["data"]["volume_id"] == str(CHAPTER_ONE)
+    assert exact["data"]["chapter_id"] == str(CHAPTER_ID_ONE)
     assert exact["data"]["document_revision"] == memory_case["documents"][0].revision
 
 

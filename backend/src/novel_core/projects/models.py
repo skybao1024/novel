@@ -1,4 +1,4 @@
-"""Versioned project, document, and scene contracts."""
+"""Versioned project, document, and chapter contracts."""
 
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ class DocumentKind(StrEnum):
     STRUCTURE = "structure"
 
 
-class SceneStatus(StrEnum):
+class ChapterStatus(StrEnum):
     PLANNED = "planned"
     DRAFTING = "drafting"
     CANDIDATE = "candidate"
@@ -103,21 +103,23 @@ class Document(VersionedDomainModel):
         return value
 
 
-class Scene(VersionedDomainModel):
-    """A scene's story position and reader-facing order."""
+class Chapter(VersionedDomainModel):
+    """A chapter's story position and reader-facing order."""
 
-    scene_id: UUID
-    chapter_id: UUID | None = None
+    chapter_id: UUID
+    volume_id: UUID | None = None
+    chapter_number: int = Field(ge=1)
+    title: NonEmptyText
     narrative_order: int = Field(ge=1)
     story_time: StoryTime
     pov_entity_id: UUID | None = None
     location_entity_id: UUID | None = None
-    status: SceneStatus
+    status: ChapterStatus
     source_document_id: UUID
     revision: NonEmptyText
 
     @model_validator(mode="after")
-    def validate_timeline(self) -> Scene:
+    def validate_timeline(self) -> Chapter:
         if not self.story_time.timeline_id:
-            raise ValueError("scene story_time requires a timeline_id")
+            raise ValueError("chapter story_time requires a timeline_id")
         return self

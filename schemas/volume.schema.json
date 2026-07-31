@@ -1,0 +1,47 @@
+{
+  "$id": "https://novel.local/schemas/volume.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "An explicit, stable Volume boundary over existing Chapter IDs.",
+  "properties": {
+    "chapter_ids": {
+      "items": {
+        "format": "uuid",
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Chapter Ids",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "title": {
+      "minLength": 1,
+      "title": "Title",
+      "type": "string"
+    },
+    "volume_id": {
+      "format": "uuid",
+      "title": "Volume Id",
+      "type": "string"
+    },
+    "volume_number": {
+      "minimum": 1,
+      "title": "Volume Number",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "volume_id",
+    "volume_number",
+    "title",
+    "chapter_ids"
+  ],
+  "title": "Volume",
+  "type": "object",
+  "x-schema-version": "1.0.0"
+}

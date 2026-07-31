@@ -1,5 +1,5 @@
 {
-  "$id": "https://novel.local/schemas/continuity-scene-status.schema.json",
+  "$id": "https://novel.local/schemas/continuity-chapter-status.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
@@ -36,27 +36,27 @@
       "title": "Satisfied",
       "type": "boolean"
     },
-    "scene_id": {
-      "format": "uuid",
-      "title": "Scene Id",
-      "type": "string"
-    },
     "schema_version": {
       "const": "1.0.0",
       "default": "1.0.0",
       "title": "Schema Version",
       "type": "string"
+    },
+    "volume_id": {
+      "format": "uuid",
+      "title": "Volume Id",
+      "type": "string"
     }
   },
   "required": [
+    "volume_id",
     "chapter_id",
-    "scene_id",
     "document_id",
     "document_revision",
     "narrative_order",
     "satisfied"
   ],
-  "title": "ContinuitySceneStatus",
+  "title": "ContinuityChapterStatus",
   "type": "object",
   "x-schema-version": "1.0.0"
 }

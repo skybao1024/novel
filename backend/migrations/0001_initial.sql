@@ -25,7 +25,7 @@ CREATE TABLE ledger_entries (
     base_revision TEXT NOT NULL,
     result_revision TEXT NOT NULL UNIQUE,
     approved_at TEXT NOT NULL,
-    source_scene_id TEXT,
+    source_chapter_id TEXT,
     schema_version TEXT NOT NULL,
     payload_json TEXT NOT NULL CHECK (json_valid(payload_json))
 ) STRICT;
@@ -67,9 +67,11 @@ CREATE TABLE entity_aliases (
     payload_json TEXT NOT NULL CHECK (json_valid(payload_json))
 ) STRICT;
 
-CREATE TABLE scenes (
-    scene_id TEXT PRIMARY KEY,
-    chapter_id TEXT,
+CREATE TABLE chapters (
+    chapter_id TEXT PRIMARY KEY,
+    volume_id TEXT,
+    chapter_number INTEGER NOT NULL UNIQUE CHECK (chapter_number >= 1),
+    title TEXT NOT NULL,
     narrative_order INTEGER NOT NULL CHECK (narrative_order >= 1),
     timeline_id TEXT NOT NULL,
     story_time_kind TEXT NOT NULL,
@@ -93,7 +95,7 @@ CREATE TABLE scenes (
 CREATE TABLE source_refs (
     source_ref_id TEXT PRIMARY KEY,
     document_id TEXT NOT NULL REFERENCES documents(document_id),
-    scene_id TEXT NOT NULL REFERENCES scenes(scene_id),
+    chapter_id TEXT NOT NULL REFERENCES chapters(chapter_id),
     document_revision TEXT NOT NULL,
     fragment_ordinal INTEGER NOT NULL CHECK (fragment_ordinal >= 1),
     quote_hash TEXT NOT NULL,
@@ -126,7 +128,7 @@ CREATE TABLE propositions (
 CREATE TABLE canon_changesets (
     change_set_id TEXT PRIMARY KEY,
     base_revision TEXT NOT NULL,
-    source_scene_id TEXT REFERENCES scenes(scene_id),
+    source_chapter_id TEXT REFERENCES chapters(chapter_id),
     approved_at TEXT NOT NULL,
     schema_version TEXT NOT NULL,
     ledger_sequence INTEGER NOT NULL UNIQUE REFERENCES ledger_entries(ledger_sequence),
@@ -195,7 +197,7 @@ CREATE TABLE events (
     story_text_end TEXT,
     story_time_json TEXT NOT NULL CHECK (json_valid(story_time_json)),
     narrative_order INTEGER NOT NULL CHECK (narrative_order >= 1),
-    source_scene_id TEXT NOT NULL REFERENCES scenes(scene_id),
+    source_chapter_id TEXT NOT NULL REFERENCES chapters(chapter_id),
     summary TEXT NOT NULL,
     canon_status TEXT NOT NULL CHECK (
         canon_status IN ('candidate', 'approved', 'superseded')
@@ -248,28 +250,28 @@ CREATE TABLE event_edges (
     CHECK (source_event_id <> target_event_id)
 ) STRICT;
 
-CREATE TABLE chapters (
-    chapter_id TEXT PRIMARY KEY,
-    chapter_number INTEGER NOT NULL UNIQUE CHECK (chapter_number >= 1),
+CREATE TABLE volumes (
+    volume_id TEXT PRIMARY KEY,
+    volume_number INTEGER NOT NULL UNIQUE CHECK (volume_number >= 1),
     title TEXT NOT NULL CHECK (length(title) > 0),
     schema_version TEXT NOT NULL,
     payload_json TEXT NOT NULL CHECK (json_valid(payload_json))
 ) STRICT;
 
-CREATE TABLE chapter_scenes (
-    chapter_id TEXT NOT NULL REFERENCES chapters(chapter_id),
-    scene_id TEXT NOT NULL UNIQUE REFERENCES scenes(scene_id),
-    scene_number_in_chapter INTEGER NOT NULL CHECK (scene_number_in_chapter >= 1),
-    PRIMARY KEY (chapter_id, scene_number_in_chapter),
-    UNIQUE (chapter_id, scene_id)
+CREATE TABLE volume_chapters (
+    volume_id TEXT NOT NULL REFERENCES volumes(volume_id),
+    chapter_id TEXT NOT NULL UNIQUE REFERENCES chapters(chapter_id),
+    chapter_number_in_volume INTEGER NOT NULL CHECK (chapter_number_in_volume >= 1),
+    PRIMARY KEY (volume_id, chapter_number_in_volume),
+    UNIQUE (volume_id, chapter_id)
 ) STRICT;
 
 CREATE TABLE navigation_summaries (
     rowid INTEGER PRIMARY KEY,
     summary_key TEXT NOT NULL UNIQUE,
-    summary_kind TEXT NOT NULL CHECK (summary_kind IN ('chapter', 'scene')),
-    chapter_id TEXT NOT NULL REFERENCES chapters(chapter_id),
-    scene_id TEXT REFERENCES scenes(scene_id),
+    summary_kind TEXT NOT NULL CHECK (summary_kind IN ('volume', 'chapter')),
+    volume_id TEXT NOT NULL REFERENCES volumes(volume_id),
+    chapter_id TEXT REFERENCES chapters(chapter_id),
     source_revision TEXT,
     max_narrative_order INTEGER NOT NULL CHECK (max_narrative_order >= 1),
     summary TEXT NOT NULL CHECK (length(summary) > 0),
@@ -277,9 +279,9 @@ CREATE TABLE navigation_summaries (
     schema_version TEXT NOT NULL,
     payload_json TEXT NOT NULL CHECK (json_valid(payload_json)),
     CHECK (
-        (summary_kind = 'chapter' AND scene_id IS NULL AND source_revision IS NULL)
+        (summary_kind = 'volume' AND chapter_id IS NULL AND source_revision IS NULL)
         OR
-        (summary_kind = 'scene' AND scene_id IS NOT NULL AND source_revision IS NOT NULL)
+        (summary_kind = 'chapter' AND chapter_id IS NOT NULL AND source_revision IS NOT NULL)
     )
 ) STRICT;
 
@@ -312,12 +314,12 @@ CREATE INDEX event_locations_by_entity
     ON event_locations(entity_id, event_id);
 CREATE INDEX event_edges_by_source ON event_edges(source_event_id);
 CREATE INDEX event_edges_by_target ON event_edges(target_event_id);
-CREATE INDEX chapters_by_number ON chapters(chapter_number, chapter_id);
-CREATE INDEX chapter_scenes_by_scene
-    ON chapter_scenes(scene_id, chapter_id, scene_number_in_chapter);
+CREATE INDEX volumes_by_number ON volumes(volume_number, volume_id);
+CREATE INDEX volume_chapters_by_chapter
+    ON volume_chapters(chapter_id, volume_id, chapter_number_in_volume);
 CREATE INDEX navigation_summaries_by_kind_order
     ON navigation_summaries(summary_kind, max_narrative_order, summary_key);
-CREATE INDEX navigation_summaries_by_chapter
-    ON navigation_summaries(chapter_id, summary_kind, scene_id);
+CREATE INDEX navigation_summaries_by_volume
+    ON navigation_summaries(volume_id, summary_kind, chapter_id);
 CREATE INDEX navigation_summary_entities_by_entity
     ON navigation_summary_entities(entity_id, summary_key);

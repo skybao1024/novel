@@ -92,14 +92,14 @@ def test_assertions_and_events_resolve_to_source_refs(
     for assertion in assertions.values():
         assert assertion.source_ref_id in source_refs
     for event in continuity_case["events"]:
-        assert event.source_scene_id in {
-            source_refs[source_ref_id].scene_id for source_ref_id in event.source_ref_ids
+        assert event.source_chapter_id in {
+            source_refs[source_ref_id].chapter_id for source_ref_id in event.source_ref_ids
         }
 
     learned_truth = assertions[UUID("50000000-0000-4000-8000-000000000006")]
     evidence = source_refs[learned_truth.source_ref_id]
     assert "王室铭文" in evidence.excerpt
-    assert evidence.document_revision == "sha256:scene-003-rev-005"
+    assert evidence.document_revision == "sha256:chapter-003-rev-005"
 
 
 def test_supersede_appends_instead_of_overwriting(

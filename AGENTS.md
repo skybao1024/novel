@@ -21,10 +21,13 @@ Novel 是纯本地的 AI 长篇小说创作系统。长期调用链为：
 → 新小说 Bootstrap
 → Writing Session
 → 动态历史查询
+→ 章节情节确认与必要的 Intent Revision
 → Draft Revision
 → AI Review
+→ 作者确认准确 Draft Revision
+→ 人物、剧情、地点等线索解析
 → 摘要与可选关键 Canon
-→ Diff 和作者批准
+→ Publication Diff 和作者批准
 → 事务性发布
 → 下一次创作
 ```
@@ -103,25 +106,34 @@ Docker 或微服务。
 ## Writing Session、Draft 与 Review
 
 - 每次创作绑定一个 Writing Session。
-- Session 保存明确 Project、目标 Scene ID、Narrative Order 边界、作者目标和 base
+- Session 保存明确 Project、目标 Chapter ID、Narrative Order 边界、作者目标和 base
   revision。
-- 新 Scene ID 由 Application 预分配，不要求先创建虚假正式 Document。
+- 新 Chapter ID 由 Application 预分配，不要求先创建虚假正式 Document。
 - Session 起始环境提供 Intent、目标、相邻历史、稀疏 Canon 和查询能力，但不声称完备。
 - 所有 Session 查询自动记录实际返回的 `retrieved_sources`。
+- 正文创作前，Codex 必须向作者展示章节因果方案并允许反复调整；方案改变正式大纲时先
+  完成准确 Intent Revision，再确认最终方案。
+- 章节方案确认只授权开始正文，不替代 Intent 或 Publication 的准确 Digest 批准。
+- 因果连贯与首遍叙述清晰是最高创作门槛，但仍属于 AI/作者语义判断，不成为 Application
+  的固定情节节点、评分或充分性算法。
 - Draft Revision 不可变；保存新 revision 不覆盖旧 revision 或正式正文。
 - 摘要缺失、查询次数少、Review 未完成或 Canon 提案不完整不能阻止保存草稿。
 - Review 必须绑定准确 Draft Revision。
 - Reviewer 可以继续查询历史；Application 不判断文学结论真伪。
+- Review 达到 `ready` 后，Plugin 必须先向作者展示准确 Draft Revision 和正文并等待确认；
+  确认前不得开始 Entity candidate、Chapter Trace、摘要、Canon 或 Publish Plan 工作。
+- 作者的草稿确认只绑定当前准确 Draft Revision；保存任何新 Draft Revision 后必须重新
+  Review 和确认。草稿确认不是 Publication Digest 批准。
 
 ## 导航记忆与查询
 
-- 默认路线是 Chapter Summary → Scene Summary → 稳定 ID → 正式原文 → AI 判断。
-- Chapter/Scene Summary 是绑定正文 revision 的导航记忆，不是 Canon，也不声称完整。
+- 默认路线是 Volume Summary → Chapter Summary → 稳定 ID → 正式原文 → AI 判断。
+- Volume/Chapter Summary 是绑定正文 revision 的导航记忆，不是 Canon，也不声称完整。
 - 摘要缺失或 stale 不代表正文不存在相关内容。
-- 同一 Session 的 Chapter、Scene、搜索和原文读取使用同一 Narrative Order 边界。
+- 同一 Session 的 Volume、Chapter、搜索和原文读取使用同一 Narrative Order 边界。
 - Writer 不能通过更换查询命令读取目标或之后的正文。
-- 一个正式 Scene 对应一个 UTF-8 Markdown Document。
-- Exact Scene Read 校验 Chapter/Scene 关系、批准状态和磁盘 bytes revision。
+- 一个正式 Chapter 对应一个 UTF-8 Markdown Document。
+- Exact Chapter Read 校验 Volume/Chapter 关系、批准状态和磁盘 bytes revision。
 - FTS 只返回摘要候选位置，不能承担事实或写作许可判断。
 - 每个需要稳定 ID 的查询都必须有对应发现入口。
 
@@ -139,7 +151,7 @@ Docker 或微服务。
 - 人物可以相信错误命题；错误信念不能被当作世界事实冲突。
 - Story Time 与 Narrative Order 始终分离。
 - Event、Assertion 和正式状态变化必须有版本化 SourceRef。
-- SourceRef 必须校验 Document/Scene、revision、excerpt 和 quote hash。
+- SourceRef 必须校验 Document/Chapter、revision、excerpt 和 quote hash。
 - SourceRef 只回指批准 Canon，不声称记录 AI 使用的全部历史。
 - Ledger 是追加式历史；Assertion 修正使用 `retract`、`supersede` 或 `correct`。
 - 人物当前状态是历史 Assertion 的计算结果，不能覆盖历史成为唯一事实源。
@@ -151,8 +163,8 @@ Publish Plan 必须绑定：
 - Project 和 Writing Session；
 - exact Draft Revision；
 - base Canon/Document revision；
-- 目标 Document、Chapter 和 Scene；
-- Scene/Chapter Summary 变化；
+- 目标 Document、Volume 和 Chapter；
+- Chapter/Volume Summary 变化；
 - 可选 Intent 变化；
 - 可选 Canon 变化；
 - Review 引用；
@@ -166,7 +178,7 @@ Publish apply 必须：
 1. 获取项目写锁；
 2. 在锁内重验 base revision 和批准；
 3. 安装准确 manuscript bytes；
-4. 更新 Chapter/Scene；
+4. 更新 Volume/Chapter；
 5. 保存导航摘要；
 6. 安装可选 Intent；
 7. 追加可选 Ledger；
@@ -225,7 +237,7 @@ uv run --extra dev python scripts/generate_schemas.py
 - Draft/Review 测试证明 revision 绑定且不覆盖。
 - Publish 测试证明 Diff、Digest、锁、安装和恢复使用准确 bytes。
 - 保持依赖边界测试，防止 Core/Application 反向依赖。
-- 真实闭环测试至少连续发布多个 Scene，并让后一个 Session 查询到前一个发布结果。
+- 真实闭环测试至少连续发布多个 Chapter，并让后一个 Session 查询到前一个发布结果。
 
 ## 开发与验证命令
 

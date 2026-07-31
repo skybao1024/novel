@@ -3,6 +3,7 @@
 from novel_application.ports.protocols import (
     BootstrapRunStore,
     CanonLedgerStore,
+    ChapterTraceBackfillStore,
     CreationRunStateStore,
     IntentRevisionStore,
     IntentStore,
@@ -18,7 +19,6 @@ from novel_application.ports.protocols import (
     ProjectWorkspace,
     ProjectWriteLock,
     PublicationStore,
-    SceneTraceBackfillStore,
     WritingRunStore,
 )
 
@@ -38,7 +38,7 @@ __all__ = [
     "ProjectWorkspace",
     "ProjectWriteLock",
     "PublicationStore",
-    "SceneTraceBackfillStore",
+    "ChapterTraceBackfillStore",
     "ProjectionQueryPort",
     "ProjectionStore",
     "WritingRunStore",

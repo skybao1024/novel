@@ -16,16 +16,16 @@ from novel_core.chronology import StoryTime
 from novel_core.identity import Entity
 from novel_core.identity.models import EntityType
 from novel_core.navigation import (
-    Chapter,
     ChapterSummary,
+    ChapterTrace,
     EntityMentionForm,
     EntityPresenceKind,
     EntityProminence,
     EntityResolutionStatus,
-    SceneSummary,
-    SceneTrace,
+    Volume,
+    VolumeSummary,
 )
-from novel_core.projects import Document, Scene
+from novel_core.projects import Chapter, Document
 
 NonEmptyText = Annotated[str, StringConstraints(min_length=1)]
 IntentText = Annotated[
@@ -228,22 +228,30 @@ class WritingSessionStatus(StrEnum):
     CLOSED = "closed"
 
 
+class WritingSessionMode(StrEnum):
+    CREATE = "create"
+    REVISE = "revise"
+
+
 class WritingSession(VersionedDomainModel):
     writing_session_id: UUID
     project_id: UUID
-    target_scene_id: UUID
+    mode: WritingSessionMode = WritingSessionMode.CREATE
+    target_chapter_id: UUID
     target_document_id: UUID
     target_document_path: NonEmptyText
-    target_chapter_id: UUID
     target_chapter_number: int = Field(ge=1)
     target_chapter_title: NonEmptyText
-    required_chapter_heading: NonEmptyText | None = None
+    target_volume_id: UUID
+    target_volume_number: int = Field(ge=1)
+    target_volume_title: NonEmptyText
+    required_chapter_heading: NonEmptyText
     target_narrative_order: int = Field(ge=1)
     target_story_time: StoryTime
     pov_entity_id: UUID | None = None
     location_entity_id: UUID | None = None
-    before_scene_id: UUID | None = None
-    after_scene_id: UUID | None = None
+    before_chapter_id: UUID | None = None
+    after_chapter_id: UUID | None = None
     base_canon_revision: Sha256Digest
     base_document_revision: Sha256Digest | None = None
     base_intent_revision: Sha256Digest
@@ -255,24 +263,28 @@ class WritingSession(VersionedDomainModel):
 
     @model_validator(mode="after")
     def validate_state(self) -> WritingSession:
-        if self.target_scene_id in {self.before_scene_id, self.after_scene_id}:
-            raise ValueError("target Scene cannot be one of its position boundaries")
-        if self.before_scene_id is not None and self.before_scene_id == self.after_scene_id:
-            raise ValueError("Session boundaries must be different Scenes")
+        if self.target_chapter_id in {self.before_chapter_id, self.after_chapter_id}:
+            raise ValueError("target Chapter cannot be one of its position boundaries")
+        if self.before_chapter_id is not None and self.before_chapter_id == self.after_chapter_id:
+            raise ValueError("Session boundaries must be different Chapters")
         if self.status is WritingSessionStatus.CLOSED and self.closed_at is None:
             raise ValueError("closed Writing Session requires closed_at")
         if self.status is WritingSessionStatus.OPEN and self.closed_at is not None:
             raise ValueError("open Writing Session cannot contain closed_at")
         if not self.target_document_path.startswith("manuscript/"):
             raise ValueError("target_document_path must be inside manuscript/")
+        if self.mode is WritingSessionMode.CREATE and self.base_document_revision is not None:
+            raise ValueError("new-Chapter Writing Session cannot have a base Document revision")
+        if self.mode is WritingSessionMode.REVISE and self.base_document_revision is None:
+            raise ValueError("Chapter-revision Writing Session requires a base Document revision")
         return self
 
 
 class RetrievalKind(StrEnum):
+    VOLUME_SUMMARY = "volume_summary"
     CHAPTER_SUMMARY = "chapter_summary"
-    SCENE_SUMMARY = "scene_summary"
-    SCENE_TRACE = "scene_trace"
-    EXACT_SCENE = "exact_scene"
+    CHAPTER_TRACE = "chapter_trace"
+    EXACT_CHAPTER = "exact_chapter"
     CANON_QUERY = "canon_query"
 
 
@@ -280,17 +292,17 @@ class RetrievedSource(VersionedDomainModel):
     retrieved_source_id: UUID
     writing_session_id: UUID
     retrieval_kind: RetrievalKind
+    volume_id: UUID | None = None
     chapter_id: UUID | None = None
-    scene_id: UUID | None = None
     document_id: UUID | None = None
     document_revision: Sha256Digest | None = None
     retrieval_reason: NonEmptyText
     retrieved_at: AwareDatetime
 
 
-class ContinuitySceneStatus(VersionedDomainModel):
+class ContinuityChapterStatus(VersionedDomainModel):
+    volume_id: UUID
     chapter_id: UUID
-    scene_id: UUID
     document_id: UUID
     document_revision: Sha256Digest
     narrative_order: int = Field(ge=1)
@@ -298,77 +310,108 @@ class ContinuitySceneStatus(VersionedDomainModel):
     satisfied: bool
 
     @model_validator(mode="after")
-    def validate_state(self) -> ContinuitySceneStatus:
+    def validate_state(self) -> ContinuityChapterStatus:
         if len(self.retrieved_source_ids) != len(set(self.retrieved_source_ids)):
             raise ValueError("Continuity retrieved_source_ids must be unique")
         if self.satisfied != bool(self.retrieved_source_ids):
-            raise ValueError("Continuity Scene satisfaction must match exact retrieved sources")
+            raise ValueError("Continuity Chapter satisfaction must match exact retrieved sources")
         return self
 
 
 class ContinuityStatus(VersionedDomainModel):
     writing_session_id: UUID
-    continuity_chapter_id: UUID | None = None
-    required_scenes: tuple[ContinuitySceneStatus, ...] = ()
-    missing_scene_ids: tuple[UUID, ...] = ()
+    continuity_volume_id: UUID | None = None
+    required_chapters: tuple[ContinuityChapterStatus, ...] = ()
+    missing_chapter_ids: tuple[UUID, ...] = ()
+    revision_source_chapter_id: UUID | None = None
+    revision_source_retrieved_source_ids: tuple[UUID, ...] = ()
+    revision_source_satisfied: bool = True
     satisfied: bool
 
     @model_validator(mode="after")
     def validate_state(self) -> ContinuityStatus:
-        if not self.required_scenes:
-            if self.continuity_chapter_id is not None:
-                raise ValueError("empty continuity window cannot identify a Chapter")
+        if not self.required_chapters:
+            if self.continuity_volume_id is not None:
+                raise ValueError("empty continuity window cannot identify a Volume")
         else:
-            if self.continuity_chapter_id is None:
-                raise ValueError("continuity window requires a Chapter")
+            if self.continuity_volume_id is None:
+                raise ValueError("continuity window requires a Volume")
             if any(
-                scene.chapter_id != self.continuity_chapter_id for scene in self.required_scenes
+                chapter.volume_id != self.continuity_volume_id for chapter in self.required_chapters
             ):
-                raise ValueError("continuity Scenes must belong to the continuity Chapter")
-        scene_ids = tuple(scene.scene_id for scene in self.required_scenes)
-        if len(scene_ids) != len(set(scene_ids)):
-            raise ValueError("continuity window contains duplicate Scenes")
-        orders = tuple(scene.narrative_order for scene in self.required_scenes)
+                raise ValueError("continuity Chapters must belong to the continuity Volume")
+        chapter_ids = tuple(chapter.chapter_id for chapter in self.required_chapters)
+        if len(chapter_ids) != len(set(chapter_ids)):
+            raise ValueError("continuity window contains duplicate Chapters")
+        orders = tuple(chapter.narrative_order for chapter in self.required_chapters)
         if orders != tuple(sorted(orders)) or len(orders) != len(set(orders)):
-            raise ValueError("continuity Scenes must have unique ascending Narrative Order")
+            raise ValueError("continuity Chapters must have unique ascending Narrative Order")
         expected_missing = tuple(
-            scene.scene_id for scene in self.required_scenes if not scene.satisfied
+            chapter.chapter_id for chapter in self.required_chapters if not chapter.satisfied
         )
-        if self.missing_scene_ids != expected_missing:
-            raise ValueError("missing_scene_ids must match unsatisfied continuity Scenes")
-        if self.satisfied != (not expected_missing):
-            raise ValueError("continuity satisfaction must match missing_scene_ids")
+        if self.missing_chapter_ids != expected_missing:
+            raise ValueError("missing_chapter_ids must match unsatisfied continuity Chapters")
+        if len(self.revision_source_retrieved_source_ids) != len(
+            set(self.revision_source_retrieved_source_ids)
+        ):
+            raise ValueError("revision source retrieved IDs must be unique")
+        if self.revision_source_chapter_id is None:
+            if self.revision_source_retrieved_source_ids:
+                raise ValueError("new-Chapter continuity cannot contain revision source reads")
+            if not self.revision_source_satisfied:
+                raise ValueError("new-Chapter continuity has no required revision source")
+        elif self.revision_source_satisfied != bool(self.revision_source_retrieved_source_ids):
+            raise ValueError("revision source satisfaction must match exact retrieved sources")
+        expected_satisfied = not expected_missing and self.revision_source_satisfied
+        if self.satisfied != expected_satisfied:
+            raise ValueError("continuity satisfaction must include the revision source")
         return self
 
 
 class CreationContext(VersionedDomainModel):
     project_id: UUID
     writing_session_id: UUID
+    mode: WritingSessionMode = WritingSessionMode.CREATE
     author_goal: NonEmptyText
     creative_constraints: TextTuple = ()
-    target_scene_id: UUID
     target_chapter_id: UUID
+    target_chapter_number: int = Field(ge=1)
+    target_chapter_title: NonEmptyText
+    target_volume_id: UUID
     target_narrative_order: int = Field(ge=1)
-    required_chapter_heading: NonEmptyText | None = None
-    before_scene_id: UUID | None = None
-    after_scene_id: UUID | None = None
+    required_chapter_heading: NonEmptyText
+    before_chapter_id: UUID | None = None
+    after_chapter_id: UUID | None = None
     base_canon_revision: Sha256Digest
+    base_document_revision: Sha256Digest | None = None
     base_intent_revision: Sha256Digest
     intent: IntentContent
-    chapter: Chapter | None = None
-    previous_scene_summary: SceneSummary | None = None
-    previous_scene_text_available: bool = False
-    continuity_chapter_id: UUID | None = None
-    continuity_scene_ids: tuple[UUID, ...] = ()
+    volume: Volume | None = None
+    previous_chapter_summary: ChapterSummary | None = None
+    previous_chapter_text_available: bool = False
+    continuity_volume_id: UUID | None = None
+    continuity_chapter_ids: tuple[UUID, ...] = ()
+    revision_source_chapter_id: UUID | None = None
     important_entities: tuple[Entity, ...] = ()
     query_capabilities: tuple[str, ...]
 
     @model_validator(mode="after")
     def validate_continuity_window(self) -> CreationContext:
-        if len(self.continuity_scene_ids) != len(set(self.continuity_scene_ids)):
-            raise ValueError("continuity_scene_ids must be unique")
-        if bool(self.continuity_scene_ids) != (self.continuity_chapter_id is not None):
-            raise ValueError("continuity Chapter and Scene IDs must be present together")
+        if len(self.continuity_chapter_ids) != len(set(self.continuity_chapter_ids)):
+            raise ValueError("continuity_chapter_ids must be unique")
+        if bool(self.continuity_chapter_ids) != (self.continuity_volume_id is not None):
+            raise ValueError("continuity Volume and Chapter IDs must be present together")
+        if self.mode is WritingSessionMode.CREATE:
+            if (
+                self.base_document_revision is not None
+                or self.revision_source_chapter_id is not None
+            ):
+                raise ValueError("new-Chapter context cannot contain a revision source")
+        elif (
+            self.base_document_revision is None
+            or self.revision_source_chapter_id != self.target_chapter_id
+        ):
+            raise ValueError("Chapter-revision context requires its exact revision source")
         return self
 
 
@@ -389,7 +432,7 @@ class DraftRevision(VersionedDomainModel):
         return self
 
 
-class SceneTraceEntityDraft(VersionedDomainModel):
+class ChapterTraceEntityDraft(VersionedDomainModel):
     temporary_name: NonEmptyText
     entity_type: EntityType
     display_name: NonEmptyText
@@ -430,7 +473,7 @@ class EntityMentionDraft(VersionedDomainModel):
         return self
 
 
-class SceneEntityOccurrenceDraft(VersionedDomainModel):
+class ChapterEntityOccurrenceDraft(VersionedDomainModel):
     resolved_entity_id: UUID | None = None
     new_entity_temporary_name: NonEmptyText | None = None
     presence_kind: EntityPresenceKind
@@ -438,38 +481,38 @@ class SceneEntityOccurrenceDraft(VersionedDomainModel):
     mention_ordinals: Annotated[tuple[int, ...], Field(max_length=256)] = ()
 
     @model_validator(mode="after")
-    def validate_reference(self) -> SceneEntityOccurrenceDraft:
+    def validate_reference(self) -> ChapterEntityOccurrenceDraft:
         if (self.resolved_entity_id is None) == (self.new_entity_temporary_name is None):
-            raise ValueError("Scene occurrence Draft requires exactly one Entity reference")
+            raise ValueError("Chapter occurrence Draft requires exactly one Entity reference")
         if len(self.mention_ordinals) != len(set(self.mention_ordinals)):
-            raise ValueError("Scene occurrence Draft mention ordinals must be unique")
+            raise ValueError("Chapter occurrence Draft mention ordinals must be unique")
         if any(ordinal < 1 for ordinal in self.mention_ordinals):
-            raise ValueError("Scene occurrence Draft mention ordinals must be positive")
+            raise ValueError("Chapter occurrence Draft mention ordinals must be positive")
         return self
 
 
-class SceneTraceDraft(VersionedDomainModel):
-    new_entities: Annotated[tuple[SceneTraceEntityDraft, ...], Field(max_length=64)] = ()
+class ChapterTraceDraft(VersionedDomainModel):
+    new_entities: Annotated[tuple[ChapterTraceEntityDraft, ...], Field(max_length=64)] = ()
     mentions: Annotated[tuple[EntityMentionDraft, ...], Field(max_length=512)] = ()
     entity_occurrences: Annotated[
-        tuple[SceneEntityOccurrenceDraft, ...],
+        tuple[ChapterEntityOccurrenceDraft, ...],
         Field(max_length=256),
     ] = ()
     scan_notes: TextTuple = ()
 
     @model_validator(mode="after")
-    def validate_trace(self) -> SceneTraceDraft:
+    def validate_trace(self) -> ChapterTraceDraft:
         temporary_names = tuple(item.temporary_name for item in self.new_entities)
         if len(temporary_names) != len(set(temporary_names)):
-            raise ValueError("Scene Trace new Entity temporary names must be unique")
+            raise ValueError("Chapter Trace new Entity temporary names must be unique")
         known_temporary_names = set(temporary_names)
 
         mention_ordinals = tuple(item.mention_ordinal for item in self.mentions)
         spans = tuple((item.start_offset, item.end_offset) for item in self.mentions)
         if mention_ordinals != tuple(range(1, len(self.mentions) + 1)):
-            raise ValueError("Scene Trace Draft mention ordinals must be contiguous and ordered")
+            raise ValueError("Chapter Trace Draft mention ordinals must be contiguous and ordered")
         if len(spans) != len(set(spans)):
-            raise ValueError("Scene Trace Draft Mention spans must be unique")
+            raise ValueError("Chapter Trace Draft Mention spans must be unique")
         mentions_by_ordinal = {item.mention_ordinal: item for item in self.mentions}
         for mention in self.mentions:
             if (
@@ -487,33 +530,33 @@ class SceneTraceDraft(VersionedDomainModel):
             else:
                 temporary_name = str(occurrence.new_entity_temporary_name)
                 if temporary_name not in known_temporary_names:
-                    raise ValueError("Scene occurrence Draft references an unknown new Entity")
+                    raise ValueError("Chapter occurrence Draft references an unknown new Entity")
                 occurrence_key = ("new", temporary_name)
                 used_temporary_names.add(temporary_name)
             occurrence_keys.append(occurrence_key)
             for ordinal in occurrence.mention_ordinals:
                 mention = mentions_by_ordinal.get(ordinal)
                 if mention is None:
-                    raise ValueError("Scene occurrence Draft references an unknown Mention")
+                    raise ValueError("Chapter occurrence Draft references an unknown Mention")
                 if occurrence.resolved_entity_id is not None:
                     if (
                         mention.resolution_status is not EntityResolutionStatus.RESOLVED_EXISTING
                         or mention.resolved_entity_id != occurrence.resolved_entity_id
                     ):
                         raise ValueError(
-                            "Scene occurrence existing Entity must match its Mention resolutions"
+                            "Chapter occurrence existing Entity must match its Mention resolutions"
                         )
                 elif (
                     mention.resolution_status is not EntityResolutionStatus.RESOLVED_NEW
                     or mention.new_entity_temporary_name != occurrence.new_entity_temporary_name
                 ):
                     raise ValueError(
-                        "Scene occurrence new Entity must match its Mention resolutions"
+                        "Chapter occurrence new Entity must match its Mention resolutions"
                     )
                 linked_ordinals.append(ordinal)
 
         if len(occurrence_keys) != len(set(occurrence_keys)):
-            raise ValueError("Scene Trace Draft can contain only one occurrence per Entity")
+            raise ValueError("Chapter Trace Draft can contain only one occurrence per Entity")
         if len(linked_ordinals) != len(set(linked_ordinals)):
             raise ValueError("resolved Mention Draft can belong to only one occurrence")
         resolved_ordinals = {
@@ -528,7 +571,7 @@ class SceneTraceDraft(VersionedDomainModel):
         if set(linked_ordinals) != resolved_ordinals:
             raise ValueError("every resolved Mention Draft must belong to one occurrence")
         if used_temporary_names != known_temporary_names:
-            raise ValueError("every new Scene Trace Entity must have one occurrence")
+            raise ValueError("every new Chapter Trace Entity must have one occurrence")
         return self
 
 
@@ -592,16 +635,20 @@ class PublicationPlan(VersionedDomainModel):
     publication_id: UUID
     project_id: UUID
     writing_session_id: UUID
+    mode: WritingSessionMode = WritingSessionMode.CREATE
     draft_revision: Sha256Digest
     base_canon_revision: Sha256Digest
     base_document_revision: Sha256Digest | None = None
+    base_chapter_summary_digest: Sha256Digest | None = None
+    base_volume_summary_digest: Sha256Digest | None = None
+    base_chapter_trace_digest: Sha256Digest | None = None
     base_intent_revision: Sha256Digest
     target_document: Document
-    scene_change: Scene
     chapter_change: Chapter
-    scene_summary_change: SceneSummary
+    volume_change: Volume
     chapter_summary_change: ChapterSummary
-    scene_trace_change: SceneTrace | None = None
+    volume_summary_change: VolumeSummary
+    chapter_trace_change: ChapterTrace | None = None
     intent_revision_id: UUID | None = None
     intent_candidate_revision: Sha256Digest | None = None
     ledger_entry: CanonLedgerEntry
@@ -610,7 +657,7 @@ class PublicationPlan(VersionedDomainModel):
     manuscript_diff: NonEmptyText
     structure_diff: NonEmptyText
     summary_diff: NonEmptyText
-    scene_trace_diff: NonEmptyText | None = None
+    chapter_trace_diff: NonEmptyText | None = None
     intent_diff: str | None = None
     canon_diff: NonEmptyText
     unresolved_questions: TextTuple = ()
@@ -620,33 +667,36 @@ class PublicationPlan(VersionedDomainModel):
     @model_validator(mode="after")
     def validate_bindings(self) -> PublicationPlan:
         document = self.target_document
-        scene = self.scene_change
         chapter = self.chapter_change
-        scene_summary = self.scene_summary_change
+        volume = self.volume_change
+        chapter_summary = self.chapter_summary_change
         if document.revision != self.manuscript_digest:
             raise ValueError("target Document revision must match manuscript_digest")
-        if scene.source_document_id != document.document_id or scene.revision != document.revision:
-            raise ValueError("published Scene must bind the exact target Document revision")
-        if scene.scene_id not in chapter.scene_ids or scene.chapter_id != chapter.chapter_id:
-            raise ValueError("published Scene must belong to the changed Chapter")
         if (
-            scene_summary.scene_id != scene.scene_id
-            or scene_summary.chapter_id != chapter.chapter_id
-            or scene_summary.source_document_id != document.document_id
-            or scene_summary.source_revision != document.revision
+            chapter.source_document_id != document.document_id
+            or chapter.revision != document.revision
         ):
-            raise ValueError("Scene Summary must bind the exact published Scene revision")
-        if (self.scene_trace_change is None) != (self.scene_trace_diff is None):
-            raise ValueError("Scene Trace change and Diff must be present together")
-        if self.scene_trace_change is not None:
-            trace = self.scene_trace_change
+            raise ValueError("published Chapter must bind the exact target Document revision")
+        if chapter.chapter_id not in volume.chapter_ids or chapter.volume_id != volume.volume_id:
+            raise ValueError("published Chapter must belong to the changed Volume")
+        if (
+            chapter_summary.chapter_id != chapter.chapter_id
+            or chapter_summary.volume_id != volume.volume_id
+            or chapter_summary.source_document_id != document.document_id
+            or chapter_summary.source_revision != document.revision
+        ):
+            raise ValueError("Chapter Summary must bind the exact published Chapter revision")
+        if (self.chapter_trace_change is None) != (self.chapter_trace_diff is None):
+            raise ValueError("Chapter Trace change and Diff must be present together")
+        if self.chapter_trace_change is not None:
+            trace = self.chapter_trace_change
             if (
-                trace.scene_id != scene.scene_id
-                or trace.chapter_id != chapter.chapter_id
+                trace.chapter_id != chapter.chapter_id
+                or trace.volume_id != volume.volume_id
                 or trace.source_document_id != document.document_id
                 or trace.source_revision != document.revision
             ):
-                raise ValueError("Scene Trace must bind the exact published Scene revision")
+                raise ValueError("Chapter Trace must bind the exact published Chapter revision")
         if self.intent_revision_id is None and self.intent_candidate_revision is not None:
             raise ValueError("Intent candidate revision requires intent_revision_id")
         if self.intent_revision_id is not None and self.intent_candidate_revision is None:
@@ -655,12 +705,17 @@ class PublicationPlan(VersionedDomainModel):
             raise ValueError("Publication review_refs must be unique")
         if self.ledger_entry.base_revision != self.base_canon_revision:
             raise ValueError("Publication Ledger entry must bind base_canon_revision")
+        if self.mode is WritingSessionMode.CREATE and self.base_document_revision is not None:
+            raise ValueError("new-Chapter Publication cannot replace a Document revision")
+        if self.mode is WritingSessionMode.REVISE and self.base_document_revision is None:
+            raise ValueError("Chapter-revision Publication requires a base Document revision")
         return self
 
 
 class PublicationStatus(StrEnum):
     PREPARED = "prepared"
     APPROVED = "approved"
+    APPLYING = "applying"
     MANUSCRIPT_INSTALLED = "manuscript_installed"
     NAVIGATION_INSTALLED = "navigation_installed"
     INTENT_INSTALLED = "intent_installed"
@@ -691,40 +746,40 @@ class Publication(VersionedDomainModel):
         return self
 
 
-class SceneTraceBackfillPlan(VersionedDomainModel):
+class ChapterTraceBackfillPlan(VersionedDomainModel):
     backfill_id: UUID
     project_id: UUID
+    volume_id: UUID
     chapter_id: UUID
-    scene_id: UUID
     source_document_id: UUID
     source_revision: Sha256Digest
     base_canon_revision: Sha256Digest
-    base_scene_trace_digest: Sha256Digest | None = None
-    scene_trace_change: SceneTrace
+    base_chapter_trace_digest: Sha256Digest | None = None
+    chapter_trace_change: ChapterTrace
     ledger_entry: CanonLedgerEntry | None = None
-    scene_trace_diff: NonEmptyText
+    chapter_trace_diff: NonEmptyText
     canon_diff: str = ""
     approval_digest: Sha256Digest
     prepared_at: AwareDatetime
 
     @model_validator(mode="after")
-    def validate_bindings(self) -> SceneTraceBackfillPlan:
-        trace = self.scene_trace_change
+    def validate_bindings(self) -> ChapterTraceBackfillPlan:
+        trace = self.chapter_trace_change
         if (
-            trace.chapter_id != self.chapter_id
-            or trace.scene_id != self.scene_id
+            trace.volume_id != self.volume_id
+            or trace.chapter_id != self.chapter_id
             or trace.source_document_id != self.source_document_id
             or trace.source_revision != self.source_revision
         ):
-            raise ValueError("Trace Backfill must bind the exact approved Scene revision")
+            raise ValueError("Trace Backfill must bind the exact approved Chapter revision")
         if self.ledger_entry is None:
             if self.canon_diff:
                 raise ValueError("Trace Backfill without a Ledger entry cannot contain Canon Diff")
             return self
         if self.ledger_entry.base_revision != self.base_canon_revision:
             raise ValueError("Trace Backfill Ledger entry must bind base_canon_revision")
-        if self.ledger_entry.source_scene_id != self.scene_id:
-            raise ValueError("Trace Backfill Ledger entry must bind the target Scene")
+        if self.ledger_entry.source_chapter_id != self.chapter_id:
+            raise ValueError("Trace Backfill Ledger entry must bind the target Chapter")
         if any(record.record_type != "entity" for record in self.ledger_entry.records):
             raise ValueError("Trace Backfill Ledger entry can contain only new Entities")
         if not self.canon_diff:
@@ -732,7 +787,7 @@ class SceneTraceBackfillPlan(VersionedDomainModel):
         return self
 
 
-class SceneTraceBackfillStatus(StrEnum):
+class ChapterTraceBackfillStatus(StrEnum):
     PREPARED = "prepared"
     APPROVED = "approved"
     LEDGER_APPENDED = "ledger_appended"
@@ -741,23 +796,26 @@ class SceneTraceBackfillStatus(StrEnum):
     COMPLETED = "completed"
 
 
-class SceneTraceBackfill(VersionedDomainModel):
-    plan: SceneTraceBackfillPlan
-    status: SceneTraceBackfillStatus
+class ChapterTraceBackfill(VersionedDomainModel):
+    plan: ChapterTraceBackfillPlan
+    status: ChapterTraceBackfillStatus
     approval: Approval | None = None
     completed_at: AwareDatetime | None = None
 
     @model_validator(mode="after")
-    def validate_state(self) -> SceneTraceBackfill:
-        if self.status is not SceneTraceBackfillStatus.PREPARED:
+    def validate_state(self) -> ChapterTraceBackfill:
+        if self.status is not ChapterTraceBackfillStatus.PREPARED:
             if self.approval is None or self.approval.operation_id != self.plan.backfill_id:
                 raise ValueError("started Trace Backfill requires its exact approval")
             if self.approval.approval_digest != self.plan.approval_digest:
                 raise ValueError("Trace Backfill approval digest does not match the plan")
         elif self.approval is not None:
             raise ValueError("prepared Trace Backfill cannot contain approval")
-        if self.status is SceneTraceBackfillStatus.COMPLETED and self.completed_at is None:
+        if self.status is ChapterTraceBackfillStatus.COMPLETED and self.completed_at is None:
             raise ValueError("completed Trace Backfill requires completed_at")
-        if self.status is not SceneTraceBackfillStatus.COMPLETED and self.completed_at is not None:
+        if (
+            self.status is not ChapterTraceBackfillStatus.COMPLETED
+            and self.completed_at is not None
+        ):
             raise ValueError("only completed Trace Backfill can contain completed_at")
         return self

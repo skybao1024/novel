@@ -32,10 +32,11 @@ novel_cli
 
 Core 定义稳定领域语义和机械不变量：
 
-- Project、Entity、Document、Chapter、Scene；
+- Project、Entity、Document、Volume、Chapter；
 - Story Time 与 Narrative Order；
 - Proposition、Assertion、Event 和 SourceRef；
 - Bootstrap、Writing Session、Draft、Review 和 Publish 的公共契约；
+- 新 Chapter 与既有批准 Chapter 修订模式，以及同身份 Document/Chapter 版本约束；
 - revision、Digest、状态转换和批准约束；
 - Canon Ledger replay。
 
@@ -102,8 +103,10 @@ Codex 行为，不属于小说业务数据，且不得覆盖作者已有的不�
 切换工作区或新建会话。选择后，Skill 把准确 Project 根作为项目工具工作目录，并仅在
 项目内按需创建非正式 `candidates/` 暂存 CLI 输入，不向父工作区或项目顶层散落候选文件。
 
-当准确 Draft 的 Review 达到 `ready` 时，Skill 在同一轮进入 Publish prepare/inspect 并
-展示批准 Digest；作者确认仍是独立的下一步，Application 不从 Review 自动推导批准。
+当准确 Draft 的 Review 达到 `ready` 时，Skill 先展示准确 Draft revision 和正文并等待
+作者确认。确认前不执行 Entity 解析、摘要、Canon 或 Publish prepare/inspect；作者确认
+后才完成这些派生工作并展示批准 Digest。Draft 确认和 Publication 批准是两个独立检查点，
+Application 不从 Review 或 Draft 确认自动推导正式批准。
 
 ## 3. 服务边界
 
@@ -116,16 +119,20 @@ Application 按真实业务能力组织服务，不建立通用工作流框架�
 | `BootstrapService` | 保存前置内容草案、生成 Diff、批准并应用 |
 | `IntentService` | 准备、批准并应用持续演进的创作意图 |
 | `CreationContextService` | 返回 Session 起始环境 |
-| `NavigationMemoryService` | Chapter/Scene 导航、搜索和准确原文读取 |
-| `EntityResolutionService` | 在 Session 边界内召回名称候选并把已消歧 Draft 输入物化为 Scene Trace |
-| `SceneTraceBackfillService` | 为准确批准历史 Scene 准备、批准、应用和恢复 Trace 回填 |
+| `NavigationMemoryService` | Volume/Chapter 导航、搜索和准确原文读取 |
+| `EntityResolutionService` | 在 Session 边界内召回名称候选并把已消歧 Draft 输入物化为 Chapter Trace |
+| `ChapterTraceBackfillService` | 为准确批准历史 Chapter 准备、批准、应用和恢复 Trace 回填 |
 | `CanonQueryService` | 实体、人物状态、Event 和 SourceRef 查询 |
 | `WritingSessionService` | 建立目标、边界和基础 revision |
 | `DraftService` | 保存和读取不可变 Draft Revision |
 | `ReviewService` | 保存绑定准确草稿的 Review |
 | `PublicationService` | 准备、批准、应用和恢复发布事务 |
 
-只有当前业务需要的方法进入端口，不为假设场景建立抽象层。
+`WritingSessionService` 的修订模式只接受准确 `revise_chapter_id`，从当前 Canon 锁定既有
+Chapter、Document、Volume、Narrative Order 和旧正文 revision。`PublicationService` 在
+同一事务模型中处理新增与修订，不建立第二套绕过 Review、Diff 或批准的覆盖命令。
+
+只有当前业务需要的方法进入端口，不为假设章节建立抽象层。
 
 ## 4. CLI 业务分组
 
@@ -160,9 +167,9 @@ Application 不向 AI 输出一个声称完备的固定上下文包。它提供�
 3. 准确且带 revision 的正文；
 4. 实际返回来源的自动记录。
 
-Creation Context 返回 `before_scene_id` 所在 Chapter 中、位于目标 Narrative Order
-之前的全部批准 Scene ID。当前 Writing Session 必须对这些 ID 逐一完成 revision 匹配的
-Exact Scene Read；`DraftService` 在保存前通过 `WritingSessionService` 验证当前 Session
+Creation Context 在存在 `before_chapter_id` 时返回紧邻目标的那个批准 Chapter ID。当前
+Writing Session 必须对该 ID 完成 revision 匹配的 Exact Chapter Read；`DraftService`
+在保存前通过 `WritingSessionService` 验证当前 Session
 的实际 `retrieved_sources`，未完成时拒绝保存。已有 Codex 对话上下文、其他 Session 的
 读取记录或 sub-agent 转述都不能替代它。
 
@@ -170,22 +177,30 @@ Exact Scene Read；`DraftService` 在保存前通过 `WritingSessionService` 验
 更早历史仍由 AI 通过摘要定位并按需读取正式原文；AI 决定其查询顺序、扩展范围和停止
 时机。
 
-新 Chapter 的章标题也是机械契约。Application 在 Writing Session 中保存准确
+每个 Chapter 的标题也是机械契约。Application 在 Writing Session 中保存准确
 `required_chapter_heading`，Creation Context 将其交给 Codex，`DraftService` 和
 `PublicationService` 分别在草稿保存、发布准备、应用及恢复时验证正文第一行。标题文字、
 编号、标点和空格不由 Skill 临时推导。
 
-稳定 Draft 的实体解析使用另一条机械边界。Application 在当前 Session 的 Narrative
-Order 边界内，用已有 Entity display name 和 Alias 扫描准确 Draft，返回全部精确命中
-候选；它不根据命中唯一、模糊分数或最近出现自动决定身份。Codex 将精确命中与代词、称谓
-和描述性 Mention 合并，明确解析为已有 Entity、新 Entity、匿名或忽略，再提交
-Scene Trace Draft。Application 校验文本 span、候选覆盖、稳定 ID 和 Draft revision；
+修订 Session 另有专用 `session revision-source`。它只返回该 Session 锁定的目标批准
+Chapter，记录准确 Document revision，并且不能用于读取其他目标或未来正文。`DraftService`
+要求该读取完成；普通 `memory read-chapter` 的 `< target_narrative_order` 边界不变。
+
+作者确认准确 Draft revision 后，实体解析使用另一条机械边界。Application 在当前 Session
+的 Narrative Order 边界内，用已有 Entity display name 和 Alias 扫描准确 Draft，返回全部
+精确命中候选；它不根据命中唯一、模糊分数或最近出现自动决定身份。Codex 将精确命中与
+代词、称谓和描述性 Mention 合并，明确解析为已有 Entity、新 Entity、匿名或忽略，再提交
+Chapter Trace Draft。Application 校验文本 span、候选覆盖、稳定 ID 和 Draft revision；
 任何 `ambiguous` Mention 都拒绝进入 Publish Plan。
 
-已发布 Scene Trace 进入 Navigation Memory 和 SQLite 可重建投影。它帮助 Entity →
-Scene → Chapter 定位，不是 Canon，也不能代替准确 Scene 原文。
+作者 Draft 确认和章节方案确认一样属于 Plugin 的创作顺序检查点，不新增 CLI 状态或把
+普通对话升级为正式批准。Skill 必须把确认绑定到准确 Draft revision；一旦保存新 revision，
+先前确认失效并重新进入 Review 和作者确认。
 
-历史 Scene 不通过伪造 Draft 或 Publication 补建 Trace。`SceneTraceBackfillService`
+已发布 Chapter Trace 进入 Navigation Memory 和 SQLite 可重建投影。它帮助 Entity →
+Chapter → Volume 定位，不是 Canon，也不能代替准确 Chapter 原文。
+
+历史 Chapter 不通过伪造 Draft 或 Publication 补建 Trace。`ChapterTraceBackfillService`
 读取准确批准正文，使用完整当前 Entity Registry 召回候选，生成绑定正文、当前 Canon
 revision 和旧 Trace digest 的不可变计划。Application 仍只校验 span、候选覆盖、ID、
 revision、批准和事务状态；AI 负责身份解析。Backfill 可以在同一批准计划中追加必要的新

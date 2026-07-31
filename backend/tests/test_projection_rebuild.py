@@ -28,7 +28,7 @@ WRONG_IDENTITY = UUID("40000000-0000-4000-8000-000000000002")
 REVELATION_EVENT = UUID("60000000-0000-4000-8000-000000000002")
 MISTAKEN_IDENTITY_EVENT = UUID("60000000-0000-4000-8000-000000000001")
 RESCUE_EVENT = UUID("60000000-0000-4000-8000-000000000003")
-REVELATION_SCENE = UUID("10000000-0000-4000-8000-000000000003")
+REVELATION_CHAPTER = UUID("10000000-0000-4000-8000-000000000003")
 
 
 def _manifest() -> ProjectManifest:
@@ -179,12 +179,12 @@ def test_sparse_canon_queries_survive_without_historical_ingest_workflow(
 
     entry = queries.character_state(
         GU_NING,
-        at_scene_id=REVELATION_SCENE,
+        at_chapter_id=REVELATION_CHAPTER,
         phase=CharacterStatePhase.ENTRY,
     )
     exit_state = queries.character_state(
         GU_NING,
-        at_scene_id=REVELATION_SCENE,
+        at_chapter_id=REVELATION_CHAPTER,
         phase=CharacterStatePhase.EXIT,
     )
     assert {item.assertion.stance for item in entry.knowledge_and_beliefs} == {
@@ -257,7 +257,7 @@ def test_schema_version_drift_triggers_projection_rebuild(
         connection.close()
 
     assert status.last_ledger_sequence == 2
-    assert database_version == 3
+    assert database_version == 4
 
 
 def test_removed_migration_history_is_replaced_from_authoritative_files(
@@ -272,10 +272,10 @@ def test_removed_migration_history_is_replaced_from_authoritative_files(
         connection.execute(
             """
             INSERT INTO schema_migrations(version, name, checksum, applied_at)
-            VALUES (4, 'removed_experiment', 'obsolete', '2026-07-26T00:00:00+00:00')
+            VALUES (5, 'removed_experiment', 'obsolete', '2026-07-26T00:00:00+00:00')
             """
         )
-        connection.execute("PRAGMA user_version = 3")
+        connection.execute("PRAGMA user_version = 4")
         connection.commit()
     finally:
         connection.close()
@@ -294,9 +294,10 @@ def test_removed_migration_history_is_replaced_from_authoritative_files(
     assert migration_rows == [
         (1, "initial"),
         (2, "creation_runs"),
-        (3, "scene_traces"),
+        (3, "chapter_traces"),
+        (4, "publication_applying"),
     ]
-    assert database_version == 3
+    assert database_version == 4
 
 
 def _semantic_result(queries: CanonQueryService) -> tuple[object, ...]:

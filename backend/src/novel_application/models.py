@@ -10,17 +10,17 @@ from novel_core import (
     Assertion,
     ChangeSetOperation,
     Chapter,
+    ChapterEntityOccurrence,
     ChapterSummary,
+    ChapterTrace,
     Document,
     DraftEntityMatchCandidate,
     Entity,
     ProjectCatalogEntry,
     ProjectManifest,
-    Scene,
-    SceneEntityOccurrence,
-    SceneSummary,
-    SceneTrace,
     SourceRef,
+    Volume,
+    VolumeSummary,
 )
 
 
@@ -91,48 +91,48 @@ class SummaryRetrievalMethod(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
-class ChapterSummaryItem:
+class VolumeSummaryItem:
+    volume: Volume
+    summary: VolumeSummary | None
+    stale: bool | None
+
+
+@dataclass(frozen=True, slots=True)
+class VolumeChapterItem:
     chapter: Chapter
+    chapter_number_in_volume: int
     summary: ChapterSummary | None
     stale: bool | None
 
 
 @dataclass(frozen=True, slots=True)
-class ChapterSceneItem:
-    scene: Scene
-    scene_number_in_chapter: int
-    summary: SceneSummary | None
-    stale: bool | None
-
-
-@dataclass(frozen=True, slots=True)
 class SummarySearchHit:
-    summary: ChapterSummary | SceneSummary
+    summary: VolumeSummary | ChapterSummary
     stale: bool
     retrieval_method: SummaryRetrievalMethod
     match_reason: str
 
 
 @dataclass(frozen=True, slots=True)
-class ExactSceneText:
+class ExactChapterText:
+    volume: Volume
     chapter: Chapter
-    scene: Scene
-    scene_number_in_chapter: int
+    chapter_number_in_volume: int
     document: Document
     text: str
     source_refs: tuple[SourceRef, ...]
 
     @property
-    def chapter_id(self) -> UUID:
-        return self.chapter.chapter_id
+    def volume_id(self) -> UUID:
+        return self.volume.volume_id
 
 
 @dataclass(frozen=True, slots=True)
 class EntityOccurrenceItem:
+    volume: Volume
     chapter: Chapter
-    scene: Scene
-    scene_trace: SceneTrace
-    occurrence: SceneEntityOccurrence
+    chapter_trace: ChapterTrace
+    occurrence: ChapterEntityOccurrence
     stale: bool
 
 
@@ -143,17 +143,17 @@ class EntityLine:
 
 
 @dataclass(frozen=True, slots=True)
-class SceneTraceBackfillSource:
+class ChapterTraceBackfillSource:
     project_id: UUID
     base_canon_revision: str
+    volume: Volume
     chapter: Chapter
-    scene: Scene
     document: Document
     text: str
     exact_candidates: tuple[DraftEntityMatchCandidate, ...]
     registry_entities: tuple[Entity, ...]
     candidate_entities: tuple[Entity, ...]
-    current_trace: SceneTrace | None
+    current_trace: ChapterTrace | None
     current_trace_stale: bool | None
     current_trace_digest: str | None
 

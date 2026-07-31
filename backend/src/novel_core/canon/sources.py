@@ -21,7 +21,7 @@ class SourceRef(VersionedDomainModel):
 
     source_ref_id: UUID
     document_id: UUID
-    scene_id: UUID
+    chapter_id: UUID
     document_revision: NonEmptyText
     fragment_ordinal: int = Field(ge=1)
     quote_hash: Sha256Hex

@@ -1,7 +1,7 @@
 interface:
   display_name: "Novel Publish"
-  short_description: "Approve resolved scene traces and publish safely"
-  default_prompt: "Use $novel-publish to prepare and inspect an exact Scene publication with its resolved Scene Trace, then ask for digest approval."
+  short_description: "Publish confirmed Drafts with exact approval"
+  default_prompt: "Use $novel-publish only after the author confirms the exact Review-ready Draft; perform the deferred Entity and Chapter Trace work, prepare and inspect the protected new or same-identity revised Chapter publication, then ask for separate digest approval."
 
 policy:
   allow_implicit_invocation: true

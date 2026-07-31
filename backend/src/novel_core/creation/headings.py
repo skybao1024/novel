@@ -1,10 +1,10 @@
-"""Deterministic manuscript headings for newly created Chapters."""
+"""Deterministic manuscript headings for Chapter documents."""
 
 from __future__ import annotations
 
 
 def chapter_heading(*, language: str, chapter_number: int, title: str) -> str:
-    """Return the exact first line required for a new Chapter's first Scene."""
+    """Return the exact first line required for one Chapter document."""
 
     if chapter_number < 1:
         raise ValueError("chapter_number must be positive")

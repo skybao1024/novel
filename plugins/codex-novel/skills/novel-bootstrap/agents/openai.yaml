@@ -1,4 +1,4 @@
 interface:
   display_name: "Novel Bootstrap"
   short_description: "Create contained projects and approve novel intent"
-  default_prompt: "Use $novel-bootstrap to create a local novel project, keep candidate inputs inside it, then prepare and approve its Intent."
+  default_prompt: "Use $novel-bootstrap to create a contained local novel project, calibrate an author-approved opening Voice Contract with an explicit first-pass readability and focal-hierarchy baseline, then prepare its exact Intent Diff for approval."

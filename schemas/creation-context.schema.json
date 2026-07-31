@@ -1,26 +1,47 @@
 {
   "$defs": {
-    "Chapter": {
+    "ChapterSummary": {
       "additionalProperties": false,
-      "description": "An explicit, stable Chapter boundary over existing Scene IDs.",
+      "description": "Non-Canon navigation memory for one approved Chapter revision.",
       "properties": {
         "chapter_id": {
           "format": "uuid",
           "title": "Chapter Id",
           "type": "string"
         },
-        "chapter_number": {
+        "chapter_number_in_volume": {
           "minimum": 1,
-          "title": "Chapter Number",
+          "title": "Chapter Number In Volume",
           "type": "integer"
         },
-        "scene_ids": {
+        "key_changes": {
+          "default": [],
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Key Changes",
+          "type": "array"
+        },
+        "main_entity_ids": {
+          "default": [],
           "items": {
             "format": "uuid",
             "type": "string"
           },
-          "minItems": 1,
-          "title": "Scene Ids",
+          "maxItems": 32,
+          "title": "Main Entity Ids",
+          "type": "array"
+        },
+        "open_questions": {
+          "default": [],
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Open Questions",
           "type": "array"
         },
         "schema_version": {
@@ -29,19 +50,36 @@
           "title": "Schema Version",
           "type": "string"
         },
-        "title": {
+        "source_document_id": {
+          "format": "uuid",
+          "title": "Source Document Id",
+          "type": "string"
+        },
+        "source_revision": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Source Revision",
+          "type": "string"
+        },
+        "summary": {
           "minLength": 1,
-          "title": "Title",
+          "title": "Summary",
+          "type": "string"
+        },
+        "volume_id": {
+          "format": "uuid",
+          "title": "Volume Id",
           "type": "string"
         }
       },
       "required": [
         "chapter_id",
-        "chapter_number",
-        "title",
-        "scene_ids"
+        "volume_id",
+        "chapter_number_in_volume",
+        "source_document_id",
+        "source_revision",
+        "summary"
       ],
-      "title": "Chapter",
+      "title": "ChapterSummary",
       "type": "object"
     },
     "Entity": {
@@ -150,54 +188,18 @@
       "title": "IntentContent",
       "type": "object"
     },
-    "SceneSummary": {
+    "Volume": {
       "additionalProperties": false,
-      "description": "Non-Canon navigation memory for one approved Scene revision.",
+      "description": "An explicit, stable Volume boundary over existing Chapter IDs.",
       "properties": {
-        "chapter_id": {
-          "format": "uuid",
-          "title": "Chapter Id",
-          "type": "string"
-        },
-        "key_changes": {
-          "default": [],
-          "items": {
-            "minLength": 1,
-            "type": "string"
-          },
-          "maxItems": 32,
-          "title": "Key Changes",
-          "type": "array"
-        },
-        "main_entity_ids": {
-          "default": [],
+        "chapter_ids": {
           "items": {
             "format": "uuid",
             "type": "string"
           },
-          "maxItems": 32,
-          "title": "Main Entity Ids",
+          "minItems": 1,
+          "title": "Chapter Ids",
           "type": "array"
-        },
-        "open_questions": {
-          "default": [],
-          "items": {
-            "minLength": 1,
-            "type": "string"
-          },
-          "maxItems": 32,
-          "title": "Open Questions",
-          "type": "array"
-        },
-        "scene_id": {
-          "format": "uuid",
-          "title": "Scene Id",
-          "type": "string"
-        },
-        "scene_number_in_chapter": {
-          "minimum": 1,
-          "title": "Scene Number In Chapter",
-          "type": "integer"
         },
         "schema_version": {
           "const": "1.0.0",
@@ -205,39 +207,45 @@
           "title": "Schema Version",
           "type": "string"
         },
-        "source_document_id": {
-          "format": "uuid",
-          "title": "Source Document Id",
-          "type": "string"
-        },
-        "source_revision": {
-          "pattern": "^sha256:[0-9a-f]{64}$",
-          "title": "Source Revision",
-          "type": "string"
-        },
-        "summary": {
+        "title": {
           "minLength": 1,
-          "title": "Summary",
+          "title": "Title",
           "type": "string"
+        },
+        "volume_id": {
+          "format": "uuid",
+          "title": "Volume Id",
+          "type": "string"
+        },
+        "volume_number": {
+          "minimum": 1,
+          "title": "Volume Number",
+          "type": "integer"
         }
       },
       "required": [
-        "scene_id",
-        "chapter_id",
-        "scene_number_in_chapter",
-        "source_document_id",
-        "source_revision",
-        "summary"
+        "volume_id",
+        "volume_number",
+        "title",
+        "chapter_ids"
       ],
-      "title": "SceneSummary",
+      "title": "Volume",
       "type": "object"
+    },
+    "WritingSessionMode": {
+      "enum": [
+        "create",
+        "revise"
+      ],
+      "title": "WritingSessionMode",
+      "type": "string"
     }
   },
   "$id": "https://novel.local/schemas/creation-context.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
-    "after_scene_id": {
+    "after_chapter_id": {
       "anyOf": [
         {
           "format": "uuid",
@@ -248,7 +256,7 @@
         }
       ],
       "default": null,
-      "title": "After Scene Id"
+      "title": "After Chapter Id"
     },
     "author_goal": {
       "minLength": 1,
@@ -260,12 +268,25 @@
       "title": "Base Canon Revision",
       "type": "string"
     },
+    "base_document_revision": {
+      "anyOf": [
+        {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Base Document Revision"
+    },
     "base_intent_revision": {
       "pattern": "^sha256:[0-9a-f]{64}$",
       "title": "Base Intent Revision",
       "type": "string"
     },
-    "before_scene_id": {
+    "before_chapter_id": {
       "anyOf": [
         {
           "format": "uuid",
@@ -276,40 +297,29 @@
         }
       ],
       "default": null,
-      "title": "Before Scene Id"
+      "title": "Before Chapter Id"
     },
-    "chapter": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/Chapter"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
-    },
-    "continuity_chapter_id": {
-      "anyOf": [
-        {
-          "format": "uuid",
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Continuity Chapter Id"
-    },
-    "continuity_scene_ids": {
+    "continuity_chapter_ids": {
       "default": [],
       "items": {
         "format": "uuid",
         "type": "string"
       },
-      "title": "Continuity Scene Ids",
+      "title": "Continuity Chapter Ids",
       "type": "array"
+    },
+    "continuity_volume_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Continuity Volume Id"
     },
     "creative_constraints": {
       "default": [],
@@ -332,10 +342,14 @@
     "intent": {
       "$ref": "#/$defs/IntentContent"
     },
-    "previous_scene_summary": {
+    "mode": {
+      "$ref": "#/$defs/WritingSessionMode",
+      "default": "create"
+    },
+    "previous_chapter_summary": {
       "anyOf": [
         {
-          "$ref": "#/$defs/SceneSummary"
+          "$ref": "#/$defs/ChapterSummary"
         },
         {
           "type": "null"
@@ -343,9 +357,9 @@
       ],
       "default": null
     },
-    "previous_scene_text_available": {
+    "previous_chapter_text_available": {
       "default": false,
-      "title": "Previous Scene Text Available",
+      "title": "Previous Chapter Text Available",
       "type": "boolean"
     },
     "project_id": {
@@ -361,9 +375,14 @@
       "type": "array"
     },
     "required_chapter_heading": {
+      "minLength": 1,
+      "title": "Required Chapter Heading",
+      "type": "string"
+    },
+    "revision_source_chapter_id": {
       "anyOf": [
         {
-          "minLength": 1,
+          "format": "uuid",
           "type": "string"
         },
         {
@@ -371,7 +390,7 @@
         }
       ],
       "default": null,
-      "title": "Required Chapter Heading"
+      "title": "Revision Source Chapter Id"
     },
     "schema_version": {
       "const": "1.0.0",
@@ -384,15 +403,36 @@
       "title": "Target Chapter Id",
       "type": "string"
     },
+    "target_chapter_number": {
+      "minimum": 1,
+      "title": "Target Chapter Number",
+      "type": "integer"
+    },
+    "target_chapter_title": {
+      "minLength": 1,
+      "title": "Target Chapter Title",
+      "type": "string"
+    },
     "target_narrative_order": {
       "minimum": 1,
       "title": "Target Narrative Order",
       "type": "integer"
     },
-    "target_scene_id": {
+    "target_volume_id": {
       "format": "uuid",
-      "title": "Target Scene Id",
+      "title": "Target Volume Id",
       "type": "string"
+    },
+    "volume": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Volume"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "writing_session_id": {
       "format": "uuid",
@@ -404,9 +444,12 @@
     "project_id",
     "writing_session_id",
     "author_goal",
-    "target_scene_id",
     "target_chapter_id",
+    "target_chapter_number",
+    "target_chapter_title",
+    "target_volume_id",
     "target_narrative_order",
+    "required_chapter_heading",
     "base_canon_revision",
     "base_intent_revision",
     "intent",

@@ -2,7 +2,7 @@
   "$defs": {
     "StoryTime": {
       "additionalProperties": false,
-      "description": "A calendar-neutral position on a story timeline.\n\nNarrative order deliberately does not belong to this value object. It is a\nproperty of the scene or event through which readers encounter the event.",
+      "description": "A calendar-neutral position on a story timeline.\n\nNarrative order deliberately does not belong to this value object. It is a\nproperty of the chapter or event through which readers encounter the event.",
       "properties": {
         "display_time": {
           "anyOf": [

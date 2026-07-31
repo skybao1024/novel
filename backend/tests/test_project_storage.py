@@ -8,6 +8,7 @@ import pytest
 
 from novel_adapters.filesystem import (
     FilesystemCanonLedgerStore,
+    FilesystemManuscriptStore,
     FilesystemProjectStore,
     FilesystemProjectWriteLock,
 )
@@ -17,8 +18,14 @@ from novel_application import (
     ProjectBusyError,
     ProjectionOutOfDateError,
     ProjectService,
+    RevisionConflictError,
 )
-from novel_core import CanonLedgerEntry, CanonLedgerSnapshot, ProjectManifest
+from novel_core import (
+    CanonLedgerEntry,
+    CanonLedgerSnapshot,
+    ProjectManifest,
+    manuscript_revision,
+)
 
 
 def project_manifest() -> ProjectManifest:
@@ -47,9 +54,9 @@ def test_initialize_creates_versioned_project_layout(tmp_path: Path) -> None:
     assert (root / "novel.yaml").is_file()
     assert (root / "canon" / "ledger" / "canon.jsonl").read_bytes() == b""
     assert (root / "intent").is_dir()
-    assert (root / "structure" / "chapters").is_dir()
+    assert (root / "structure" / "volumes").is_dir()
+    assert (root / "memory" / "volumes").is_dir()
     assert (root / "memory" / "chapters").is_dir()
-    assert (root / "memory" / "scenes").is_dir()
     assert not (root / "runs").exists()
     assert not (root / ".novel" / "cache").exists()
     assert (root / ".novel" / "project.sqlite").is_file()
@@ -96,6 +103,38 @@ def test_ledger_rejects_incomplete_or_blank_jsonl(tmp_path: Path) -> None:
     ledger.layout.ledger.write_text("\n", encoding="utf-8")
     with pytest.raises(LedgerReadError, match="blank"):
         ledger.read_entries()
+
+
+def test_manuscript_replacement_requires_the_exact_old_or_approved_new_bytes(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "story"
+    FilesystemProjectStore(root).initialize(project_manifest())
+    manuscripts = FilesystemManuscriptStore(root)
+    path = "manuscript/chapter.md"
+    old = "旧正文。\n".encode()
+    revised = "批准的新正文。\n".encode()
+    manuscripts.install_document(path, old)
+
+    manuscripts.replace_document(
+        path,
+        expected_revision=manuscript_revision(old),
+        content=revised,
+    )
+    manuscripts.replace_document(
+        path,
+        expected_revision=manuscript_revision(old),
+        content=revised,
+    )
+    assert manuscripts.read_document(path) == revised
+
+    (root / path).write_bytes("第三种未批准正文。\n".encode())
+    with pytest.raises(RevisionConflictError, match="no longer matches revision base"):
+        manuscripts.replace_document(
+            path,
+            expected_revision=manuscript_revision(old),
+            content=revised,
+        )
 
 
 def test_append_is_durable_and_idempotent(

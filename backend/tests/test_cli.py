@@ -33,11 +33,23 @@ def test_cli_exposes_only_current_project_canon_and_memory_commands(capsys) -> N
         "init",
         "ingest",
         "changeset",
-        "scene-card",
+        "chapter-card",
         "evidence",
         "check",
     ):
         assert removed not in help_text
+
+
+def test_session_start_help_explains_chapter_boundary_direction(capsys) -> None:
+    assert main(["session", "start", "--help"]) == EXIT_OK
+    help_text = " ".join(capsys.readouterr().out.split())
+
+    assert "--before-chapter-id PREVIOUS_CHAPTER_ID" in help_text
+    assert "approved Chapter immediately before the new Chapter" in help_text
+    assert "use this alone to append after the last Chapter" in help_text
+    assert "--after-chapter-id NEXT_CHAPTER_ID" in help_text
+    assert "approved Chapter immediately after the new Chapter" in help_text
+    assert "use this alone to insert before the first Chapter" in help_text
 
 
 def test_version_and_schema_commands_have_one_json_document(
@@ -67,7 +79,7 @@ def test_version_and_schema_commands_have_one_json_document(
                 str(catalog),
                 "schema",
                 "show",
-                "scene-summary",
+                "chapter-summary",
                 "--json",
             ]
         )
@@ -77,7 +89,7 @@ def test_version_and_schema_commands_have_one_json_document(
     UUID(schema_payload["diagnostic_id"])
     assert schema_payload["ok"] is True
     assert schema_payload["data"]["x-schema-version"] == "1.0.0"
-    assert schema_payload["data"]["title"] == "SceneSummary"
+    assert schema_payload["data"]["title"] == "ChapterSummary"
 
 
 def test_project_create_doctor_and_project_discovery(

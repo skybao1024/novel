@@ -79,10 +79,11 @@ Session 是一次明确的创作任务，不是固定上下文包。它保存：
 ```text
 writing_session_id
 project_id
-target_scene_id
-target_chapter
-before_scene_id
-after_scene_id
+mode
+target_chapter_id
+target_volume
+before_chapter_id
+after_chapter_id
 base_canon_revision
 base_document_revision
 author_goal
@@ -90,35 +91,40 @@ creative_constraints
 status
 ```
 
-Application 为新 Scene 生成稳定 ID。目标位置必须明确：
+Application 为新 Chapter 生成稳定 ID。目标位置必须明确：
 
-- 全书第一 Scene；
-- 已有 Chapter 末尾；
-- 新 Chapter；
-- 两个批准 Scene 之间。
+- 全书第一 Chapter；
+- 已有 Volume 末尾；
+- 新 Volume；
+- 两个批准 Chapter 之间。
 
 边界不能依赖尚不存在的 manuscript Document。
 
-当前实现为新 Scene 预分配 Scene/Document UUID，并以有间隔的整数 Narrative Order
-分配新位置。首场、末尾追加和两个相邻 Scene 之间插入都由 Application 校验；如果一个
-旧项目的相邻整数位置已经没有可用槽位，Session 会明确失败，而不会静默重排已批准 Scene
+当前实现为新 Chapter 预分配 Chapter/Document UUID，并以有间隔的整数 Narrative Order
+分配新位置。第一章、末尾追加和两个相邻 Chapter 之间插入都由 Application 校验；如果一个
+旧项目的相邻整数位置已经没有可用槽位，Session 会明确失败，而不会静默重排已批准 Chapter
 或改写 Ledger 历史。
+
+`mode=revise` 时，作者或 Codex 必须给出准确已批准 Chapter ID。Application 复用该 Chapter
+及其 Document、Volume、Narrative Order、Story Time、POV 和地点，保存准确
+`base_document_revision`，并拒绝同时传入新 Volume、插入边界或元数据覆盖。修订不是新增
+一个重复 Chapter，也不是直接编辑正式文件。
 
 ### 3.2 起始环境
 
 `session context` 返回 Creation Context。Codex 获取作者目标、Intent Canon、目标位置、
 相邻历史、稀疏人物状态和可用查询能力。
 
-新 Chapter 的 Session 还返回准确 `required_chapter_heading`。它由 Application 根据项目
-语言、Chapter number 和 title 生成，并保存于 Session；Codex 必须原样用作首场 Draft
-第一行。已有 Chapter 的后续 Scene 返回 `null`，不重复章标题。
+新 Chapter 的 Session 必须接收显式 Chapter number 和 title，并返回准确
+`required_chapter_heading`。它由 Application 根据项目语言生成并保存于 Session；Codex
+必须原样用作 Draft 第一行。修订 Session 沿用原 Chapter number、title 和标题。
 
 之后 Codex 自主进行摘要搜索、原文读取和 Canon 查询。所有 Session 查询自动记录
 `retrieved_sources`。
 
-Creation Context 同时返回有界连续性窗口：`before_scene_id` 所在 Chapter 中、位于目标
-Narrative Order 之前的全部批准 Scene ID。当前 Session 必须逐一执行 Exact Scene Read；
-`session continuity-status` 按 Scene、Document、revision 和当前 Session 的
+Creation Context 同时返回有界连续性窗口：存在 `before_chapter_id` 时，只返回紧邻目标的
+批准 Chapter ID。当前 Session 必须执行 Exact Chapter Read；
+`session continuity-status` 按 Chapter、Document、revision 和当前 Session 的
 `retrieved_sources` 报告完成状态。`draft save` 在窗口未完成时拒绝保存。即使正文已在同一
 Codex 任务的上下文、另一个 Session 或 sub-agent 上下文中出现，也必须为当前 Session
 重新读取并记录。
@@ -127,9 +133,31 @@ Codex 任务的上下文、另一个 Session 或 sub-agent 上下文中出现，
 原文。Application 不把这部分的查询次数、摘要缺失或 stale、结构化记录完整度变成写作
 许可。
 
+修订 Context 另返回 `revision_source_chapter_id`。Codex 必须调用
+`session revision-source` 读取目标旧正文；Application 校验 Chapter/Volume/Document、
+磁盘 bytes 和 `base_document_revision` 后记录来源。普通 `memory read-chapter` 仍拒绝目标
+或之后正文。修订源和连续性窗口都满足后才能保存 Draft。
+
 StoryTime、待保存正文和发布摘要等 Codex 文件输入集中在
 `candidates/writing/<writing-session-id>/`；Session ID 分配前使用唯一 pending 子目录。
 Application 不读取父工作区寻找输入，也不把 `candidates/` 当作正式 Draft 或正文。
+
+### 3.3 章节情节确认
+
+完成 Creation Context、连续性窗口和必要历史查询后，Plugin 先在
+`candidates/writing/<writing-session-id>/planning/` 保存版本化章节情节方案，并向作者展示。
+方案保持简洁，只包含本章与批准大纲的对应关系、进入和退出状态、人物目标与知识边界、
+关键因果链、选择与代价、下一章条件和潜在 Intent 影响。它不是正式业务数据，也不建立
+低于 Chapter 的正式叙事单位。
+
+作者可以反复调整方案。若调整改变 Current Outline 的正式承诺，Plugin 转入
+`intent prepare → intent inspect → 准确批准 → intent apply`，应用后重新获取 Creation
+Context，再确认最终对齐的方案。只有作者明确确认该方案版本后，Writer 才能产生正文；
+正文阶段发现必须改变主要因果、人物选择、代价或退出状态时，返回方案与必要 Intent 修订。
+
+方案确认只允许开始写作，不替代 Intent Digest 或 Publication Digest 批准。Application
+继续管理 Intent 和 Publication 的机械边界，不用固定字段、情节节点数或算法判断方案是否
+文学上充分。
 
 ## 4. Draft Revision
 
@@ -155,13 +183,18 @@ Application 不读取父工作区寻找输入，也不把 `candidates/` 当作�
 - Review 尚未完成；
 - 可选 Canon 提案不完整。
 
-当前 Session 尚未完成连续性窗口 Exact Scene Read、新 Chapter 首场缺少或改动
+当前 Session 尚未完成连续性窗口 Exact Chapter Read、缺少或改动
 `required_chapter_heading`、非法路径、错误 Session、损坏 UTF-8 或 revision 冲突可以
 硬阻止。
 
-稳定 Draft 可以调用 `draft entity-candidates`。Application 只扫描当前 Session 历史边界
-内可见 Entity 的 display name 和 Alias，并返回准确文本 span 和全部精确候选。返回结果
-用于召回和消歧，不自动决定身份。
+修订 Draft 还必须完成准确 revision source 读取，并绑定 Session 的旧 Document revision。
+首个 `draft diff` 默认以旧正式正文为基线，而不是 `/dev/null`。修订后的 bytes 必须与旧
+revision 不同。
+
+只有 Review 达到 `ready` 且作者确认准确 Draft revision 后，才可以调用
+`draft entity-candidates`。Application 只扫描当前 Session 历史边界内可见 Entity 的
+display name 和 Alias，并返回准确文本 span 和全部精确候选。返回结果用于召回和消歧，
+不自动决定身份。
 
 ## 5. Review
 
@@ -173,40 +206,59 @@ Reviewer 可以：
 - 查看 Creative Brief 和 Writing Rules；
 - 查询人物状态和重要 Event；
 - 继续搜索摘要和读取历史原文；
-- 检查 POV、人物声音、因果、节奏、情绪和主题；
+- 检查 POV、人物声音、因果、节奏、情绪、主题、首遍可读性、词汇可达性和段落主次；
 - 报告不确定性；
 - 建议修订或准备发布。
+
+首遍可读性要求目标读者通常能够连续读懂谁做了什么、发生了什么变化、因果或指代指向
+哪里，以及当前段落最重要的内容。Intent 可以批准有意的不确定性或特殊语体，但不能把
+生僻措辞、句法纠缠、逻辑压缩或平均分配描写篇幅误当成作者性。Application 不使用固定
+词表、句长、段落模板或可读性分数裁决这些语义判断。
 
 Application 校验 Review 绑定和引用存在，不判断文学结论是否正确。
 
 Writer 可以基于 Review 保存新 Draft Revision，然后建立新 Review。旧 Review 保持不变。
 
-Review recommendation 达到 `ready` 后，除非作者明确要求 draft-only 或 review-only，
-Plugin 在同一轮生成发布所需摘要，调用 `publish prepare` 和 `publish inspect`，展示准确
-Diff、Publication ID 与 approval digest 并请求作者确认。Review 的 `ready` 不构成批准，
-Plugin 不得自动调用 approve/apply，但也不得把确认请求拖到作者下一次“继续写”。
+Review recommendation 达到 `ready` 后，Plugin 立即向作者展示准确 Draft revision、完整
+正文和必要的 Review 结论，并请求确认该稿，然后停止当前后续工作。确认前不得调用
+`draft entity-candidates`，不得生成 Chapter Trace、Chapter/Volume Summary、Canon 提案或
+Publish Plan。
 
-## 6. 导航记忆、Intent 与 Canon 提案
+作者要求修改时，Writer 保存新 Draft revision 并重新 Review，再展示新准确 revision。
+作者确认只适用于被展示的准确 Draft revision，不是 Intent 或 Publication 批准，也不能
+复用于任何后续 revision。
 
-准备发布的 Draft 需要生成：
+## 6. 作者确认稳定 Draft
 
-- 当前 Scene Summary；
-- 必要的 Chapter Summary 更新；
-- Scene Trace Draft；
+作者可以明确确认、要求修改或暂时保留 Review `ready` 的 Draft。Plugin 只有在作者明确
+确认准确 Draft revision 后才能进入派生线索和发布准备。如果任务跨轮继续，后续轮必须
+引用同一 revision；无法确认当前上下文中的准确确认时，重新展示 Draft 并请求确认。
+
+这项检查点由 Plugin 管理，不新增 Application 状态或 Digest。它的目的只是避免在正文仍
+可能被作者改动时提前执行人物、剧情、地点等线索解析及其它派生工作。最终正式发布仍必须
+经过独立的 `publication_id + approval_digest` 批准。
+
+## 7. 导航记忆、Intent 与 Canon 提案
+
+作者确认的准确 Draft 需要生成：
+
+- 当前 Chapter Summary；
+- 必要的 Volume Summary 更新；
+- Chapter Trace Draft；
 - 可选 Intent Revision；
 - 可选关键 Canon Delta。
 
-Scene Summary 只总结当前 Scene。Chapter Summary 只聚合本章 Scene Summary。
+Chapter Summary 只总结当前 Chapter。Volume Summary 只聚合本章 Chapter Summary。
 
 Canon Delta 只记录长期重要内容，不要求覆盖正文中的全部动作、对话、心理或主题变化。
 摘要或 Canon 提案的语义完整性由 Codex 和作者审核，不由命中数决定。
 
-Scene Trace Draft 必须覆盖 Application 返回的精确 Entity 候选，并补充 AI 识别的称谓、
+Chapter Trace Draft 必须覆盖 Application 返回的精确 Entity 候选，并补充 AI 识别的称谓、
 代词和描述性 Mention。每个 Mention 明确解析为已有 Entity、新 Entity、匿名或忽略；新
 Entity 使用临时名称，Application 在准备 Publish Plan 时分配稳定 UUID。未解决的
 `ambiguous` Mention、错误文本 span、不可见 Entity ID 或未覆盖精确候选会拒绝准备发布。
 
-## 7. Publish Plan
+## 8. Publish Plan
 
 `publish prepare` 绑定准确 Session 和 Draft Revision，生成不可变 Publish Plan：
 
@@ -214,15 +266,20 @@ Entity 使用临时名称，Application 在准备 Publish Plan 时分配稳定 U
 publication_id
 project_id
 writing_session_id
+mode
 draft_revision
 base_canon_revision
+base_document_revision
+base_chapter_summary_digest
+base_volume_summary_digest
+base_chapter_trace_digest
 target_document
 manuscript_digest
-scene_change
 chapter_change
-scene_summary_change
+volume_change
 chapter_summary_change
-scene_trace_change
+volume_summary_change
+chapter_trace_change
 optional_intent_change
 optional_canon_change
 review_refs
@@ -231,66 +288,83 @@ approval_digest
 
 Application 必须机械验证：
 
-- 目标位置和 Chapter/Scene 关系；
-- 新 Chapter 首场正文第一行与 Session 的 `required_chapter_heading` 完全一致；
-- 一 Scene 一 Document；
+- 目标位置和 Volume/Chapter 关系；
+- Chapter 正文第一行与 Session 的 `required_chapter_heading` 完全一致；
+- 一 Chapter 一 Document；
 - Draft bytes 和 digest；
 - base revision；
 - Summary 来源 revision；
-- Scene Trace 文本 span、候选覆盖、身份解析、Scene/Document revision 和 occurrence；
+- Chapter Trace 文本 span、候选覆盖、身份解析、Chapter/Document revision 和 occurrence；
 - Canon SourceRef 与候选正文；
 - 所有稳定 ID 和 Schema；
 - 发布步骤能够安全恢复。
 
-`publish prepare` 接收 Scene Summary、Chapter Summary 和版本化 Scene Trace Draft，
+修订模式还验证当前 Canon 中的 Chapter/Document 仍是 Session 锁定的同一身份和旧
+revision，Volume 结构与 Chapter 元数据未变，磁盘 bytes 等于准确旧 revision，旧 Summary
+和 Trace digest 未发生未批准变化。候选 Document/Chapter 保持同一 ID，只更新正文
+revision。
+
+`publish prepare` 接收 Chapter Summary、Volume Summary 和版本化 Chapter Trace Draft，
 以及可选 Entity ID、key changes 和 open questions。Application 根据 Session、Draft 和
-当前 Chapter 自动分配 Trace、Mention、occurrence 和新 Entity ID，生成 Summary 的稳定
-绑定、source revision、Scene 顺序和 Chapter dependency digest。调用方不手工计算这些
+当前 Volume 自动分配 Trace、Mention、occurrence 和新 Entity ID，生成 Summary 的稳定
+绑定、source revision、Chapter 顺序和 Volume dependency digest。调用方不手工计算这些
 机械字段。可选 Intent Revision 必须已经单独通过其准确 Digest 批准且尚未应用；Publish
 Digest 会再次绑定该候选 revision。
 
 标题校验在 `draft save` 提前反馈，并在 Publish prepare、apply/recover 重复执行，防止
 升级前保存的旧 Draft 或恢复路径绕过格式契约。
 
-## 8. 作者批准
+## 9. 作者批准
 
 `publish inspect` 向作者展示：
 
 - 正文 Diff；
-- Scene/Chapter 结构 Diff；
-- Scene/Chapter Summary Diff；
-- Scene Trace、Mention resolution 和新 Entity Diff；
+- Chapter/Volume 结构 Diff；
+- Chapter/Volume Summary Diff；
+- Chapter Trace、Mention resolution 和新 Entity Diff；
 - 可选 Intent Diff；
 - 可选 Canon Diff；
 - Reviewer 结论；
 - 未解决问题；
 - approval digest。
 
+修订时正文 Diff 必须是旧正式正文 → 候选正文，结构 Diff 显示同一 Chapter/Document 的
+revision 变化，Summary 和 Trace Diff 显示旧当前版本 → 新候选版本，不能用 `/dev/null`
+掩盖覆盖范围。
+
 批准必须显式引用准确 `publication_id` 和 `approval_digest`。Publish Plan 任一受保护内容
 变化后，旧批准立即失效。
 
-## 9. 事务性发布
+草稿确认只说明作者接受准确正文 revision，不批准随后生成的 Summary、Trace、Entity、
+Intent 或 Canon Diff，不能被解释为 Publication 批准。
+
+## 10. 事务性发布
 
 `publish apply` 在项目写锁内执行：
 
 1. 重新读取 Manifest、Ledger 和目标文件；
-2. 校验 base revision 和批准 Digest；
+2. 校验 base revision 和批准 Digest，并在任何正式文件写入前记录 `applying` 状态；
 3. 把准确 manuscript bytes 写入临时文件；
-4. 原子安装正式正文；
-5. 创建或更新 Chapter/Scene 正式结构；
-6. 保存 Scene Summary；
-7. 更新 Chapter Summary；
-8. 保存 Scene Trace；
+4. 新 Chapter 原子安装新文件；修订 Chapter 仅在现有 bytes 等于准确 base revision 时原子
+   替换同一路径；
+5. 创建或更新 Volume/Chapter 正式结构；
+6. 保存 Chapter Summary；
+7. 更新 Volume Summary；
+8. 保存 Chapter Trace；
 9. 安装可选 Intent Revision；
 10. 追加包含可选新 Entity 的 Canon Ledger；
 11. 重建并校验 SQLite/FTS；
 12. 保存事务完成状态；
 13. 关闭 Writing Session。
 
+修订 Ledger entry 追加同一 Document ID 和 Chapter ID 的新版本。Core replay 只允许
+Document 路径和 kind 不变，并只允许批准 Chapter 的正文 revision 改变；Volume、Narrative
+Order、Story Time、POV、地点、状态或 Document 关联变化都会被拒绝。
+
 未批准内容不得进入正式正文。SQLite 更新失败不能截断已追加 Ledger，也不能静默回滚已经
 安装且可恢复的权威文件。
 
-## 10. 恢复
+## 11. 恢复
 
 每个 Publication 保存足够状态以判断：
 
@@ -307,86 +381,94 @@ Digest 会再次绑定该候选 revision。
 
 恢复使用同一个不可变 Publish Plan 幂等重试 manuscript、导航记忆、Intent、Ledger 和
 投影步骤。不同 bytes 的既有 manuscript 会产生 revision conflict，不会被恢复流程覆盖。
+修订恢复接受准确旧 bytes 或已批准新 bytes，第三种 revision 一律冲突。
 
-## 11. Plugin 工作方式
+## 12. Plugin 工作方式
 
 Plugin 在一次完整创作中：
 
 1. 解析明确 Project；
-2. 建立或恢复 Writing Session；
+2. 建立或恢复新增或修订 Writing Session；修订时读取准确 revision source；
 3. 获取 Creation Context；
 4. 逐一读取连续性窗口原文并确认状态，再按需扩展历史查询；
-5. 保存 Draft Revision；
-6. 以 Reviewer 角色审核并继续查询；
-7. 保存修订稿；
-8. 对稳定 Draft 调用 Entity candidate scan，完成 Mention 消歧并生成 Scene Trace Draft；
-9. Review 达到 `ready` 后在同一轮生成摘要和可选 Canon；
-10. 准备可选 Intent 更新；
-11. 准备并 inspect Publish Plan；
-12. 在当前轮展示正文、Trace、Entity、准确 ID 和 Digest 并等待作者批准；
-13. 只在获得准确批准后调用 Publish Apply。
+5. 生成并展示章节情节方案，按作者意见反复调整；
+6. 若方案改变正式大纲，先完成准确 Intent Revision，再重新获取 Context 并确认最终方案；
+7. 作者明确确认方案后保存 Draft Revision；
+8. 以因果连贯和首遍叙述清晰为首要顺序进行 Reviewer 审核并继续查询；
+9. 保存必要的修订稿并重新 Review；
+10. Review 达到 `ready` 后立即展示准确 Draft revision 和正文，等待作者确认，不执行派生
+    线索或发布准备；
+11. 作者要求修改时回到第 9 步；作者确认准确 revision 后继续；
+12. 对已确认 Draft 调用 Entity candidate scan，完成人物、地点等 Mention 消歧并生成
+    Chapter Trace Draft；
+13. 生成 Chapter/Volume Summary 和可选 Canon；
+14. 准备可选 Intent 更新；
+15. 准备并 inspect Publish Plan；
+16. 展示正文、Trace、Entity、准确 ID 和 Digest 并等待作者批准；
+17. 只在获得准确批准后调用 Publish Apply。
 
 Plugin 不直接修改项目文件，不用提示词代替 Draft、Review、批准或事务记录。
 
-## 12. 历史 Scene Trace Backfill
+## 13. 历史 Chapter Trace Backfill
 
 历史回填使用独立命令，不建立虚假 Writing Session、Draft、Review 或 Publication。
 
-### 12.1 Source
+### 13.1 Source
 
 ```text
 novel trace-backfill source \
-  --chapter-id <id> --scene-id <id>
+  --volume-id <id> --chapter-id <id>
 ```
 
-Application 校验稳定 Chapter/Scene 关系、批准状态、Document revision 和磁盘 bytes，
+Application 校验稳定 Volume/Chapter 关系、批准状态、Document revision 和磁盘 bytes，
 返回完整正文、当前 Trace、旧 Trace digest 以及对完整当前 Entity Registry 的确定性精确
 候选。这个入口只服务回填，不能作为普通 Writer 历史读取入口。
 
 同名或身份不清时，使用
 `trace-backfill entity-line --entity-id <id>` 查看候选 Entity 已有的 revision-bound
-occurrence，并对相关 Scene 再调用 `trace-backfill source` 阅读准确批准原文。线路和精确
+occurrence，并对相关 Chapter 再调用 `trace-backfill source` 阅读准确批准原文。线路和精确
 名称仍不能自动决定身份。
 
-### 12.2 Prepare 与批准
+### 13.2 Prepare 与批准
 
-Codex 生成版本化 Scene Trace Draft，覆盖全部精确候选并补充代词、称谓和描述性 Mention。
+Codex 生成版本化 Chapter Trace Draft，覆盖全部精确候选并补充代词、称谓和描述性 Mention。
 `trace-backfill prepare` 绑定 source revision；Application 物化稳定 Trace/Mention/
 occurrence ID 和可选新 Entity ID，生成新旧 Trace Diff、Canon Diff、Backfill ID 和
 approval digest。
 
-`trace-backfill inspect` 向作者展示目标 Scene、准确 revision、Mention resolutions、
+`trace-backfill inspect` 向作者展示目标 Chapter、准确 revision、Mention resolutions、
 occurrences、新 Entity、Diff、Backfill ID 和 Digest。只有作者明确批准准确
 `backfill_id + approval_digest` 后才能 approve/apply。
 
-### 12.3 Apply 与恢复
+### 13.3 Apply 与恢复
 
 Application 在项目锁内：
 
-1. 重验 Project、Canon base、Chapter/Scene/Document 和 manuscript bytes；
+1. 重验 Project、Canon base、Volume/Chapter/Document 和 manuscript bytes；
 2. 重验旧 Trace digest；
 3. 幂等追加可选新 Entity Ledger entry；
-4. 安装准确 Scene Trace；
+4. 安装准确 Chapter Trace；
 5. 重建并校验 SQLite；
 6. 记录完成状态。
 
 发生中途失败后，只能对同一不可变计划调用 `trace-backfill recover`。Backfill 不修改
-manuscript、Chapter/Scene、Summary、Intent、Event、Assertion 或 Writing Session。
+manuscript、Volume/Chapter、Summary、Intent、Event、Assertion 或 Writing Session。
 
-Plugin 默认按 Narrative Order 从早到晚回填，降低同一场景人物被重复建档的风险；处理
-顺序不是身份判断依据。每一 Scene 都单独准备和批准，不提供“一键自动全书抽取并写入”。
+Plugin 默认按 Narrative Order 从早到晚回填，降低同一章节人物被重复建档的风险；处理
+顺序不是身份判断依据。每一 Chapter 都单独准备和批准，不提供“一键自动全书抽取并写入”。
 
-## 13. 闭环验收
+## 14. 闭环验收
 
-使用真实小说连续发布多个 Scene，必须证明：
+使用真实小说连续发布多个 Chapter，必须证明：
 
 - 新小说可以从讨论进入可创作状态；
-- 新 Scene 不需要预先存在正式正文；
+- 新 Chapter 不需要预先存在正式正文；
 - AI 可以恢复必要历史而不加载整本小说；
 - 所有返回来源被准确记录；
 - Draft 和 Review revision 不混淆；
+- Review `ready` 后先确认准确 Draft revision，确认前不执行派生线索或发布准备；
 - 作者批准内容与最终安装 bytes 一致；
 - 发布失败可恢复；
 - 上一次发布内容能被下一次 Session 查询；
-- 升级前 Scene 可以通过准确 Digest 回填 Trace，且旧 Trace 修正不改正文；
+- 升级前 Chapter 可以通过准确 Digest 回填 Trace，且旧 Trace 修正不改正文；
 - 不同小说不会共享或串写数据。

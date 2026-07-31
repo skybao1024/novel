@@ -19,8 +19,8 @@ CREATE TABLE intent_revisions (
 CREATE TABLE writing_sessions (
     writing_session_id TEXT PRIMARY KEY,
     project_id TEXT NOT NULL,
-    target_scene_id TEXT NOT NULL,
     target_chapter_id TEXT NOT NULL,
+    target_volume_id TEXT NOT NULL,
     target_narrative_order INTEGER NOT NULL,
     base_canon_revision TEXT NOT NULL,
     base_intent_revision TEXT NOT NULL,
@@ -41,7 +41,7 @@ CREATE TABLE retrieved_sources (
     retrieved_source_id TEXT PRIMARY KEY,
     writing_session_id TEXT NOT NULL REFERENCES writing_sessions(writing_session_id),
     retrieval_kind TEXT NOT NULL,
-    scene_id TEXT,
+    chapter_id TEXT,
     document_id TEXT,
     document_revision TEXT,
     payload_json TEXT NOT NULL CHECK (json_valid(payload_json))

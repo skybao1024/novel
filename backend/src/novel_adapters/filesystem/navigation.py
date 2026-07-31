@@ -1,4 +1,4 @@
-"""Reviewable Chapter and navigation-memory files."""
+"""Reviewable Volume and navigation-memory files."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from pydantic import ValidationError
 
 from novel_adapters.filesystem.project import ProjectLayout
 from novel_application.errors import NavigationMemoryReadError
-from novel_core import Chapter, ChapterSummary, SceneSummary, SceneTrace
+from novel_core import ChapterSummary, ChapterTrace, Volume, VolumeSummary
 from novel_core._base import VersionedDomainModel
 
 ModelType = TypeVar("ModelType", bound=VersionedDomainModel)
@@ -30,10 +30,10 @@ class _Hasher(Protocol):
 class NavigationSourceSnapshot:
     """Validated file sources used to rebuild the SQLite memory projection."""
 
-    chapters: tuple[Chapter, ...]
-    scene_summaries: tuple[SceneSummary, ...]
+    volumes: tuple[Volume, ...]
     chapter_summaries: tuple[ChapterSummary, ...]
-    scene_traces: tuple[SceneTrace, ...]
+    volume_summaries: tuple[VolumeSummary, ...]
+    chapter_traces: tuple[ChapterTrace, ...]
     revision: str
 
 
@@ -45,16 +45,10 @@ class FilesystemNavigationStore:
 
     def load_snapshot(self) -> NavigationSourceSnapshot:
         hasher = hashlib.sha256()
-        chapters = self._load_models(
-            self.layout.chapters,
-            Chapter,
-            "chapter_id",
-            hasher,
-        )
-        scene_summaries = self._load_models(
-            self.layout.scene_memory,
-            SceneSummary,
-            "scene_id",
+        volumes = self._load_models(
+            self.layout.volumes,
+            Volume,
+            "volume_id",
             hasher,
         )
         chapter_summaries = self._load_models(
@@ -63,34 +57,40 @@ class FilesystemNavigationStore:
             "chapter_id",
             hasher,
         )
-        scene_traces = self._load_models(
-            self.layout.scene_traces,
-            SceneTrace,
-            "scene_id",
+        volume_summaries = self._load_models(
+            self.layout.volume_memory,
+            VolumeSummary,
+            "volume_id",
+            hasher,
+        )
+        chapter_traces = self._load_models(
+            self.layout.chapter_traces,
+            ChapterTrace,
+            "chapter_id",
             hasher,
         )
         return NavigationSourceSnapshot(
-            chapters=chapters,
-            scene_summaries=scene_summaries,
+            volumes=volumes,
             chapter_summaries=chapter_summaries,
-            scene_traces=scene_traces,
+            volume_summaries=volume_summaries,
+            chapter_traces=chapter_traces,
             revision=f"sha256:{hasher.hexdigest()}",
         )
 
-    def save_chapter(self, chapter: Chapter) -> None:
-        self._replace_model(self.layout.chapters / f"{chapter.chapter_id}.json", chapter)
-
-    def save_scene_summary(self, summary: SceneSummary) -> None:
-        self._replace_model(self.layout.scene_memory / f"{summary.scene_id}.json", summary)
+    def save_volume(self, volume: Volume) -> None:
+        self._replace_model(self.layout.volumes / f"{volume.volume_id}.json", volume)
 
     def save_chapter_summary(self, summary: ChapterSummary) -> None:
+        self._replace_model(self.layout.chapter_memory / f"{summary.chapter_id}.json", summary)
+
+    def save_volume_summary(self, summary: VolumeSummary) -> None:
         self._replace_model(
-            self.layout.chapter_memory / f"{summary.chapter_id}.json",
+            self.layout.volume_memory / f"{summary.volume_id}.json",
             summary,
         )
 
-    def save_scene_trace(self, trace: SceneTrace) -> None:
-        self._replace_model(self.layout.scene_traces / f"{trace.scene_id}.json", trace)
+    def save_chapter_trace(self, trace: ChapterTrace) -> None:
+        self._replace_model(self.layout.chapter_traces / f"{trace.chapter_id}.json", trace)
 
     def _load_models(
         self,

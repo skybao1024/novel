@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from uuid import UUID
 
 import pytest
@@ -9,15 +10,17 @@ from novel_core import (
     EMPTY_CANON_REVISION,
     CanonLedgerEntry,
     ChangeSetLedgerRecord,
+    Chapter,
+    ChapterLedgerRecord,
+    ChapterStatus,
     Document,
     DocumentKind,
+    DocumentLedgerRecord,
     EntityAlias,
     LedgerReplayError,
-    Scene,
-    SceneLedgerRecord,
-    SceneStatus,
     StoryTime,
     StoryTimeKind,
+    next_canon_revision,
     replay_ledger,
 )
 
@@ -38,10 +41,10 @@ def test_m1_contracts_are_frozen_and_round_trip(
         "/absolute.md",
         "../outside.md",
         "manuscript/../outside.md",
-        r"manuscript\scene.md",
+        r"manuscript\chapter.md",
         "C:/outside.md",
-        "manuscript//scene.md",
-        "manuscript/\nscene.md",
+        "manuscript//chapter.md",
+        "manuscript/\nchapter.md",
     ],
 )
 def test_document_rejects_non_project_relative_paths(relative_path: str) -> None:
@@ -66,17 +69,19 @@ def test_alias_rejects_invalid_ordinal_range() -> None:
         )
 
 
-def test_scene_keeps_story_time_separate_from_narrative_order() -> None:
-    scene = Scene(
-        scene_id=UUID("10000000-0000-4000-8000-000000000099"),
+def test_chapter_keeps_story_time_separate_from_narrative_order() -> None:
+    chapter = Chapter(
+        chapter_id=UUID("10000000-0000-4000-8000-000000000099"),
+        chapter_number=9,
+        title="错序",
         narrative_order=9,
         story_time=StoryTime(kind=StoryTimeKind.ORDINAL, story_time_start=2),
-        status=SceneStatus.APPROVED,
+        status=ChapterStatus.APPROVED,
         source_document_id=UUID("20000000-0000-4000-8000-000000000001"),
         revision="revision-1",
     )
-    assert scene.narrative_order == 9
-    assert scene.story_time.story_time_start == 2
+    assert chapter.narrative_order == 9
+    assert chapter.story_time.story_time_start == 2
 
 
 def test_ledger_replay_rejects_sequence_and_revision_gaps(
@@ -90,6 +95,84 @@ def test_ledger_replay_rejects_sequence_and_revision_gaps(
     assert wrong_revision.base_revision != EMPTY_CANON_REVISION
     with pytest.raises(LedgerReplayError, match="base_revision"):
         replay_ledger((wrong_revision,))
+
+
+def test_ledger_replay_applies_same_identity_document_and_chapter_revisions() -> None:
+    document_id = UUID("20000000-0000-4000-8000-000000000098")
+    chapter_id = UUID("10000000-0000-4000-8000-000000000098")
+    volume_id = UUID("11000000-0000-4000-8000-000000000098")
+    base_revision = "sha256:" + "1" * 64
+    revised_revision = "sha256:" + "2" * 64
+    document = Document(
+        document_id=document_id,
+        relative_path=f"manuscript/{chapter_id}.md",
+        document_kind=DocumentKind.MANUSCRIPT,
+        revision=base_revision,
+    )
+    chapter = Chapter(
+        chapter_id=chapter_id,
+        volume_id=volume_id,
+        chapter_number=1,
+        title="初见",
+        narrative_order=1,
+        story_time=StoryTime(kind=StoryTimeKind.ORDINAL, story_time_start=1),
+        status=ChapterStatus.APPROVED,
+        source_document_id=document_id,
+        revision=base_revision,
+    )
+    first = CanonLedgerEntry(
+        ledger_sequence=1,
+        ledger_entry_id=UUID("a0000000-0000-4000-8000-000000000098"),
+        base_revision=EMPTY_CANON_REVISION,
+        approved_at=datetime.now(UTC),
+        source_chapter_id=chapter_id,
+        records=(
+            DocumentLedgerRecord(value=document),
+            ChapterLedgerRecord(value=chapter),
+        ),
+    )
+    revised_document = document.model_copy(update={"revision": revised_revision})
+    revised_chapter = chapter.model_copy(update={"revision": revised_revision})
+    second = CanonLedgerEntry(
+        ledger_sequence=2,
+        ledger_entry_id=UUID("a0000000-0000-4000-8000-000000000099"),
+        base_revision=next_canon_revision(EMPTY_CANON_REVISION, first),
+        approved_at=datetime.now(UTC),
+        source_chapter_id=chapter_id,
+        records=(
+            DocumentLedgerRecord(value=revised_document),
+            ChapterLedgerRecord(value=revised_chapter),
+        ),
+    )
+
+    snapshot = replay_ledger((first, second))
+
+    assert snapshot.documents == (revised_document,)
+    assert snapshot.chapters == (revised_chapter,)
+
+    moved_chapter = revised_chapter.model_copy(update={"narrative_order": 2})
+    invalid = second.model_copy(
+        update={
+            "records": (
+                DocumentLedgerRecord(value=revised_document),
+                ChapterLedgerRecord(value=moved_chapter),
+            )
+        }
+    )
+    with pytest.raises(LedgerReplayError, match="change only approved manuscript bytes"):
+        replay_ledger((first, invalid))
+
+    renamed_chapter = revised_chapter.model_copy(update={"title": "偷换章名"})
+    invalid = second.model_copy(
+        update={
+            "records": (
+                DocumentLedgerRecord(value=revised_document),
+                ChapterLedgerRecord(value=renamed_chapter),
+            )
+        }
+    )
+    with pytest.raises(LedgerReplayError, match="change only approved manuscript bytes"):
+        replay_ledger((first, invalid))
 
 
 def test_ledger_replay_keeps_invalidated_assertions(
@@ -130,15 +213,17 @@ def test_ledger_replay_rejects_missing_relative_time_anchor(
     ledger_entries: tuple[CanonLedgerEntry, ...],
 ) -> None:
     entry = ledger_entries[0]
-    scene_record = next(record for record in entry.records if isinstance(record, SceneLedgerRecord))
+    chapter_record = next(
+        record for record in entry.records if isinstance(record, ChapterLedgerRecord)
+    )
     relative_time = StoryTime(
         kind=StoryTimeKind.RELATIVE,
         time_anchor_event_id=UUID("60000000-0000-4000-8000-000000000099"),
         relative_offset=-1,
     )
-    bad_scene = scene_record.value.model_copy(update={"story_time": relative_time})
+    bad_chapter = chapter_record.value.model_copy(update={"story_time": relative_time})
     bad_records = tuple(
-        SceneLedgerRecord(value=bad_scene) if record is scene_record else record
+        ChapterLedgerRecord(value=bad_chapter) if record is chapter_record else record
         for record in entry.records
     )
     bad_entry = entry.model_copy(update={"records": bad_records})

@@ -35,8 +35,8 @@
       "schema_version": "1.0.0",
       "source_ref_id": "30000000-0000-4000-8000-000000000001",
       "document_id": "20000000-0000-4000-8000-000000000001",
-      "scene_id": "10000000-0000-4000-8000-000000000001",
-      "document_revision": "sha256:scene-001-rev-003",
+      "chapter_id": "10000000-0000-4000-8000-000000000001",
+      "document_revision": "sha256:chapter-001-rev-003",
       "fragment_ordinal": 7,
       "quote_hash": "ad4fecb8d00cf0b6544e288afabd844f956f5c0eecb0a83a2ee92e4370052443",
       "excerpt": "雨声里，沈砚摘下旧银戒：我本名萧砚，是先王遗子。"
@@ -45,8 +45,8 @@
       "schema_version": "1.0.0",
       "source_ref_id": "30000000-0000-4000-8000-000000000002",
       "document_id": "20000000-0000-4000-8000-000000000001",
-      "scene_id": "10000000-0000-4000-8000-000000000002",
-      "document_revision": "sha256:scene-002-rev-002",
+      "chapter_id": "10000000-0000-4000-8000-000000000002",
+      "document_revision": "sha256:chapter-002-rev-002",
       "fragment_ordinal": 4,
       "quote_hash": "860c976917a26dc03f5b1773cf11c63ce939c6c91d8a075f6a435f80487fdfda",
       "excerpt": "顾宁摇头：沈砚只是走私客，不可能与王室有关。"
@@ -55,8 +55,8 @@
       "schema_version": "1.0.0",
       "source_ref_id": "30000000-0000-4000-8000-000000000003",
       "document_id": "20000000-0000-4000-8000-000000000001",
-      "scene_id": "10000000-0000-4000-8000-000000000004",
-      "document_revision": "sha256:scene-004-rev-001",
+      "chapter_id": "10000000-0000-4000-8000-000000000004",
+      "document_revision": "sha256:chapter-004-rev-001",
       "fragment_ordinal": 2,
       "quote_hash": "c6b7b0514c7901c2cc3359b112585648460f2cddf020418a05dfd95ff91183dd",
       "excerpt": "火灾发生在十年前，幼年的萧砚被管家从北塔暗道救走。"
@@ -65,8 +65,8 @@
       "schema_version": "1.0.0",
       "source_ref_id": "30000000-0000-4000-8000-000000000004",
       "document_id": "20000000-0000-4000-8000-000000000001",
-      "scene_id": "10000000-0000-4000-8000-000000000003",
-      "document_revision": "sha256:scene-003-rev-005",
+      "chapter_id": "10000000-0000-4000-8000-000000000003",
+      "document_revision": "sha256:chapter-003-rev-005",
       "fragment_ordinal": 9,
       "quote_hash": "02b43894c69c9431cca77c62228fea0b7d2908b8664ab556c1b8d1eb1f4fa28d",
       "excerpt": "顾宁终于认出银戒内侧的王室铭文，明白自己一直错了。"
@@ -95,7 +95,7 @@
       "location_entity_ids": [
         "00000000-0000-4000-8000-000000000003"
       ],
-      "source_scene_id": "10000000-0000-4000-8000-000000000002",
+      "source_chapter_id": "10000000-0000-4000-8000-000000000002",
       "source_ref_ids": [
         "30000000-0000-4000-8000-000000000002"
       ],
@@ -124,7 +124,7 @@
       "location_entity_ids": [
         "00000000-0000-4000-8000-000000000003"
       ],
-      "source_scene_id": "10000000-0000-4000-8000-000000000003",
+      "source_chapter_id": "10000000-0000-4000-8000-000000000003",
       "source_ref_ids": [
         "30000000-0000-4000-8000-000000000004"
       ],
@@ -152,7 +152,7 @@
       "location_entity_ids": [
         "00000000-0000-4000-8000-000000000003"
       ],
-      "source_scene_id": "10000000-0000-4000-8000-000000000004",
+      "source_chapter_id": "10000000-0000-4000-8000-000000000004",
       "source_ref_ids": [
         "30000000-0000-4000-8000-000000000003"
       ],
@@ -183,7 +183,7 @@
       "schema_version": "1.0.0",
       "change_set_id": "80000000-0000-4000-8000-000000000001",
       "base_revision": "canon-rev-000",
-      "source_scene_id": "10000000-0000-4000-8000-000000000002",
+      "source_chapter_id": "10000000-0000-4000-8000-000000000002",
       "approved_at": "2026-07-24T10:00:00+08:00",
       "operations": [
         {
@@ -330,7 +330,7 @@
       "schema_version": "1.0.0",
       "change_set_id": "80000000-0000-4000-8000-000000000002",
       "base_revision": "canon-rev-001",
-      "source_scene_id": "10000000-0000-4000-8000-000000000003",
+      "source_chapter_id": "10000000-0000-4000-8000-000000000003",
       "approved_at": "2026-07-24T10:30:00+08:00",
       "operations": [
         {

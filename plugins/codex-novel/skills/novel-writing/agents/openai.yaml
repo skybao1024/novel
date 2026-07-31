@@ -1,7 +1,7 @@
 interface:
   display_name: "Novel Writing"
-  short_description: "Write with continuity and resolved entity traces"
-  default_prompt: "Use $novel-writing to recover required predecessor-Chapter prose, preserve the exact new-Chapter heading, resolve Entity mentions into a Scene Trace, review, and prepare immediate digest approval."
+  short_description: "Review the Draft before extracting story clues"
+  default_prompt: "Use $novel-writing to recover exact history, develop and iterate an author-visible causal Chapter plan, route material outline changes through approved Intent Revision, and draft only after the author confirms the aligned plan; make causal coherence and first-pass narrative clarity the highest creative gate, preserve project-specific voice, review the exact Draft, then show the exact ready revision and wait for author confirmation before you resolve Entity mentions, extract story clues, generate summaries, or prepare publication digest approval."
 
 policy:
   allow_implicit_invocation: true

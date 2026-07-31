@@ -11,7 +11,7 @@
     },
     "StoryTime": {
       "additionalProperties": false,
-      "description": "A calendar-neutral position on a story timeline.\n\nNarrative order deliberately does not belong to this value object. It is a\nproperty of the scene or event through which readers encounter the event.",
+      "description": "A calendar-neutral position on a story timeline.\n\nNarrative order deliberately does not belong to this value object. It is a\nproperty of the chapter or event through which readers encounter the event.",
       "properties": {
         "display_time": {
           "anyOf": [
@@ -163,6 +163,11 @@
       "title": "Schema Version",
       "type": "string"
     },
+    "source_chapter_id": {
+      "format": "uuid",
+      "title": "Source Chapter Id",
+      "type": "string"
+    },
     "source_ref_ids": {
       "items": {
         "format": "uuid",
@@ -171,11 +176,6 @@
       "minItems": 1,
       "title": "Source Ref Ids",
       "type": "array"
-    },
-    "source_scene_id": {
-      "format": "uuid",
-      "title": "Source Scene Id",
-      "type": "string"
     },
     "story_time": {
       "$ref": "#/$defs/StoryTime"
@@ -192,7 +192,7 @@
     "story_time",
     "narrative_order",
     "participant_entity_ids",
-    "source_scene_id",
+    "source_chapter_id",
     "source_ref_ids",
     "summary"
   ],

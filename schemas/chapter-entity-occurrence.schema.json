@@ -21,50 +21,36 @@
       "type": "string"
     }
   },
-  "$id": "https://novel.local/schemas/scene-entity-occurrence-draft.schema.json",
+  "$id": "https://novel.local/schemas/chapter-entity-occurrence.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
+  "description": "One resolved Entity's navigational presence in an approved Chapter.",
   "properties": {
-    "mention_ordinals": {
+    "entity_id": {
+      "format": "uuid",
+      "title": "Entity Id",
+      "type": "string"
+    },
+    "mention_ids": {
       "default": [],
       "items": {
-        "type": "integer"
+        "format": "uuid",
+        "type": "string"
       },
       "maxItems": 256,
-      "title": "Mention Ordinals",
+      "title": "Mention Ids",
       "type": "array"
     },
-    "new_entity_temporary_name": {
-      "anyOf": [
-        {
-          "minLength": 1,
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "New Entity Temporary Name"
+    "occurrence_id": {
+      "format": "uuid",
+      "title": "Occurrence Id",
+      "type": "string"
     },
     "presence_kind": {
       "$ref": "#/$defs/EntityPresenceKind"
     },
     "prominence": {
       "$ref": "#/$defs/EntityProminence"
-    },
-    "resolved_entity_id": {
-      "anyOf": [
-        {
-          "format": "uuid",
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Resolved Entity Id"
     },
     "schema_version": {
       "const": "1.0.0",
@@ -74,10 +60,12 @@
     }
   },
   "required": [
+    "occurrence_id",
+    "entity_id",
     "presence_kind",
     "prominence"
   ],
-  "title": "SceneEntityOccurrenceDraft",
+  "title": "ChapterEntityOccurrence",
   "type": "object",
   "x-schema-version": "1.0.0"
 }

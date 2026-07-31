@@ -13,6 +13,7 @@ from novel_core import (
     AssertionScope,
     AssertionStance,
     ChangeSetOperationKind,
+    Chapter,
     CharacterState,
     CharacterStatePhase,
     Document,
@@ -23,7 +24,6 @@ from novel_core import (
     EventEdge,
     Proposition,
     QueryWarning,
-    Scene,
     SourcedAssertion,
     SourceRef,
     StoryTimeKind,
@@ -48,8 +48,8 @@ class CanonQueryService:
     def get_document(self, document_id: UUID) -> Document | None:
         return self._projection.get_document(document_id)
 
-    def get_scene(self, scene_id: UUID) -> Scene | None:
-        return self._projection.get_scene(scene_id)
+    def get_chapter(self, chapter_id: UUID) -> Chapter | None:
+        return self._projection.get_chapter(chapter_id)
 
     def get_event(self, event_id: UUID) -> Event | None:
         return self._projection.get_event(event_id)
@@ -110,13 +110,13 @@ class CanonQueryService:
         *,
         participant_entity_id: UUID | None = None,
         location_entity_id: UUID | None = None,
-        source_scene_id: UUID | None = None,
+        source_chapter_id: UUID | None = None,
         order: EventOrder = EventOrder.NARRATIVE,
     ) -> tuple[Event, ...]:
         return self._projection.list_events(
             participant_entity_id=participant_entity_id,
             location_entity_id=location_entity_id,
-            source_scene_id=source_scene_id,
+            source_chapter_id=source_chapter_id,
             order=order,
         )
 
@@ -133,52 +133,52 @@ class CanonQueryService:
     def source_refs_for_event(self, event_id: UUID) -> tuple[SourceRef, ...]:
         return self._projection.source_refs_for_event(event_id)
 
-    def source_refs_for_scene(self, scene_id: UUID) -> tuple[SourceRef, ...]:
-        return self._projection.source_refs_for_scene(scene_id)
+    def source_refs_for_chapter(self, chapter_id: UUID) -> tuple[SourceRef, ...]:
+        return self._projection.source_refs_for_chapter(chapter_id)
 
     def character_state(
         self,
         character_id: UUID,
         *,
-        at_scene_id: UUID,
+        at_chapter_id: UUID,
         phase: CharacterStatePhase = CharacterStatePhase.ENTRY,
     ) -> CharacterState:
-        scene = self.get_scene(at_scene_id)
-        if scene is None:
-            raise ValueError(f"scene does not exist: {at_scene_id}")
+        chapter = self.get_chapter(at_chapter_id)
+        if chapter is None:
+            raise ValueError(f"chapter does not exist: {at_chapter_id}")
         if self.get_entity(character_id) is None:
             raise ValueError(f"entity does not exist: {character_id}")
 
-        if scene.story_time.kind is not StoryTimeKind.ORDINAL:
+        if chapter.story_time.kind is not StoryTimeKind.ORDINAL:
             return CharacterState(
                 character_id=character_id,
-                target_scene_id=at_scene_id,
+                target_chapter_id=at_chapter_id,
                 phase=phase,
-                story_time=scene.story_time,
+                story_time=chapter.story_time,
                 warnings=(
                     QueryWarning(
                         code="indeterminate_time_order",
                         message="character-state reconstruction requires ordinal StoryTime",
-                        related_ids=(str(at_scene_id),),
+                        related_ids=(str(at_chapter_id),),
                     ),
                 ),
             )
 
-        story_ordinal = int(scene.story_time.story_time_start)
+        story_ordinal = int(chapter.story_time.story_time_start)
         objective = self._sourced_effective_assertions(
-            timeline_id=scene.story_time.timeline_id,
+            timeline_id=chapter.story_time.timeline_id,
             story_ordinal=story_ordinal,
             subject_entity_id=character_id,
             scope=AssertionScope.OBJECTIVE,
-            at_scene_id=at_scene_id,
+            at_chapter_id=at_chapter_id,
             phase=phase,
         )
         knowledge = self._sourced_effective_assertions(
-            timeline_id=scene.story_time.timeline_id,
+            timeline_id=chapter.story_time.timeline_id,
             story_ordinal=story_ordinal,
             holder_entity_id=character_id,
             scope=AssertionScope.CHARACTER,
-            at_scene_id=at_scene_id,
+            at_chapter_id=at_chapter_id,
             phase=phase,
         )
         locations = tuple(
@@ -205,9 +205,9 @@ class CanonQueryService:
             )
         return CharacterState(
             character_id=character_id,
-            target_scene_id=at_scene_id,
+            target_chapter_id=at_chapter_id,
             phase=phase,
-            story_time=scene.story_time,
+            story_time=chapter.story_time,
             location=location,
             active_goals=goals,
             knowledge_and_beliefs=knowledge,
@@ -284,7 +284,7 @@ class CanonQueryService:
         *,
         timeline_id: str,
         story_ordinal: int,
-        at_scene_id: UUID,
+        at_chapter_id: UUID,
         phase: CharacterStatePhase,
         subject_entity_id: UUID | None = None,
         scope: AssertionScope | None = None,
@@ -324,7 +324,8 @@ class CanonQueryService:
                     else None
                 )
                 effective = (
-                    invalidating_source is not None and invalidating_source.scene_id == at_scene_id
+                    invalidating_source is not None
+                    and invalidating_source.chapter_id == at_chapter_id
                 )
             if not effective:
                 continue
@@ -334,7 +335,7 @@ class CanonQueryService:
                 continue
             if (
                 phase is CharacterStatePhase.ENTRY
-                and source_ref.scene_id == at_scene_id
+                and source_ref.chapter_id == at_chapter_id
                 and item.assertion.valid_from.kind is StoryTimeKind.ORDINAL
                 and item.assertion.valid_from.story_time_start == story_ordinal
             ):

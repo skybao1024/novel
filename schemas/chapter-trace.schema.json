@@ -1,5 +1,51 @@
 {
   "$defs": {
+    "ChapterEntityOccurrence": {
+      "additionalProperties": false,
+      "description": "One resolved Entity's navigational presence in an approved Chapter.",
+      "properties": {
+        "entity_id": {
+          "format": "uuid",
+          "title": "Entity Id",
+          "type": "string"
+        },
+        "mention_ids": {
+          "default": [],
+          "items": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "maxItems": 256,
+          "title": "Mention Ids",
+          "type": "array"
+        },
+        "occurrence_id": {
+          "format": "uuid",
+          "title": "Occurrence Id",
+          "type": "string"
+        },
+        "presence_kind": {
+          "$ref": "#/$defs/EntityPresenceKind"
+        },
+        "prominence": {
+          "$ref": "#/$defs/EntityProminence"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "occurrence_id",
+        "entity_id",
+        "presence_kind",
+        "prominence"
+      ],
+      "title": "ChapterEntityOccurrence",
+      "type": "object"
+    },
     "EntityMention": {
       "additionalProperties": false,
       "description": "One revision-bound prose span and its explicit Entity resolution.",
@@ -133,68 +179,27 @@
       ],
       "title": "EntityResolutionStatus",
       "type": "string"
-    },
-    "SceneEntityOccurrence": {
-      "additionalProperties": false,
-      "description": "One resolved Entity's navigational presence in an approved Scene.",
-      "properties": {
-        "entity_id": {
-          "format": "uuid",
-          "title": "Entity Id",
-          "type": "string"
-        },
-        "mention_ids": {
-          "default": [],
-          "items": {
-            "format": "uuid",
-            "type": "string"
-          },
-          "maxItems": 256,
-          "title": "Mention Ids",
-          "type": "array"
-        },
-        "occurrence_id": {
-          "format": "uuid",
-          "title": "Occurrence Id",
-          "type": "string"
-        },
-        "presence_kind": {
-          "$ref": "#/$defs/EntityPresenceKind"
-        },
-        "prominence": {
-          "$ref": "#/$defs/EntityProminence"
-        },
-        "schema_version": {
-          "const": "1.0.0",
-          "default": "1.0.0",
-          "title": "Schema Version",
-          "type": "string"
-        }
-      },
-      "required": [
-        "occurrence_id",
-        "entity_id",
-        "presence_kind",
-        "prominence"
-      ],
-      "title": "SceneEntityOccurrence",
-      "type": "object"
     }
   },
-  "$id": "https://novel.local/schemas/scene-trace.schema.json",
+  "$id": "https://novel.local/schemas/chapter-trace.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Non-Canon Entity mention and occurrence index for one Scene revision.",
+  "description": "Non-Canon Entity mention and occurrence index for one Chapter revision.",
   "properties": {
     "chapter_id": {
       "format": "uuid",
       "title": "Chapter Id",
       "type": "string"
     },
+    "chapter_trace_id": {
+      "format": "uuid",
+      "title": "Chapter Trace Id",
+      "type": "string"
+    },
     "entity_occurrences": {
       "default": [],
       "items": {
-        "$ref": "#/$defs/SceneEntityOccurrence"
+        "$ref": "#/$defs/ChapterEntityOccurrence"
       },
       "maxItems": 256,
       "title": "Entity Occurrences",
@@ -219,16 +224,6 @@
       "title": "Scan Notes",
       "type": "array"
     },
-    "scene_id": {
-      "format": "uuid",
-      "title": "Scene Id",
-      "type": "string"
-    },
-    "scene_trace_id": {
-      "format": "uuid",
-      "title": "Scene Trace Id",
-      "type": "string"
-    },
     "schema_version": {
       "const": "1.0.0",
       "default": "1.0.0",
@@ -244,16 +239,21 @@
       "pattern": "^sha256:[0-9a-f]{64}$",
       "title": "Source Revision",
       "type": "string"
+    },
+    "volume_id": {
+      "format": "uuid",
+      "title": "Volume Id",
+      "type": "string"
     }
   },
   "required": [
-    "scene_trace_id",
-    "scene_id",
+    "chapter_trace_id",
     "chapter_id",
+    "volume_id",
     "source_document_id",
     "source_revision"
   ],
-  "title": "SceneTrace",
+  "title": "ChapterTrace",
   "type": "object",
   "x-schema-version": "1.0.0"
 }

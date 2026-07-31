@@ -66,19 +66,19 @@ class ManuscriptReadError(NovelApplicationError):
 
 
 class NavigationMemoryReadError(NovelApplicationError):
-    """A Chapter or Summary source file is unreadable or inconsistent."""
+    """A Volume or Summary source file is unreadable or inconsistent."""
+
+
+class VolumeNotFoundError(NovelApplicationError):
+    """A requested stable Volume ID is not in the explicit structure."""
 
 
 class ChapterNotFoundError(NovelApplicationError):
-    """A requested stable Chapter ID is not in the explicit structure."""
+    """A requested stable Chapter ID is not in the approved projection."""
 
 
-class SceneNotFoundError(NovelApplicationError):
-    """A requested stable Scene ID is not in the approved projection."""
-
-
-class SceneHistoryAccessError(NovelApplicationError):
-    """A Scene cannot be returned through ordinary historical reading."""
+class ChapterHistoryAccessError(NovelApplicationError):
+    """A Chapter cannot be returned through ordinary historical reading."""
 
 
 class ProjectionOutOfDateError(NovelApplicationError):

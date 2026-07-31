@@ -41,25 +41,25 @@ from novel_core import (
     CanonLedgerSnapshot,
     ChangeSetOperation,
     Chapter,
+    ChapterEntityOccurrence,
     ChapterSummary,
+    ChapterTrace,
     Document,
     Entity,
     Event,
     EventEdge,
     ProjectManifest,
     Proposition,
-    Scene,
-    SceneEntityOccurrence,
-    SceneSummary,
-    SceneTrace,
     SourceRef,
     StoryTime,
     StoryTimeKind,
+    Volume,
+    VolumeSummary,
     chapter_summary_is_stale,
+    chapter_trace_is_stale,
     next_canon_revision,
-    scene_summary_is_stale,
-    scene_trace_is_stale,
-    validate_chapter_bindings,
+    validate_volume_bindings,
+    volume_summary_is_stale,
 )
 from novel_core.canon.ledger import record_key
 
@@ -262,42 +262,56 @@ class SQLiteProjectionQueries:
     def get_document(self, document_id: UUID) -> Document | None:
         return self._get_model("documents", "document_id", document_id, Document)
 
-    def get_scene(self, scene_id: UUID) -> Scene | None:
-        return self._get_model("scenes", "scene_id", scene_id, Scene)
+    def get_chapter(self, chapter_id: UUID) -> Chapter | None:
+        return self._get_model("chapters", "chapter_id", chapter_id, Chapter)
 
-    def list_chapters(self) -> tuple[Chapter, ...]:
+    def list_volumes(self) -> tuple[Volume, ...]:
         with self._connection() as connection:
             rows = connection.execute(
                 """
                 SELECT payload_json
-                FROM chapters
-                ORDER BY chapter_number, chapter_id
+                FROM volumes
+                ORDER BY volume_number, volume_id
                 """
             ).fetchall()
-        return tuple(Chapter.from_json(row["payload_json"]) for row in rows)
+        return tuple(Volume.from_json(row["payload_json"]) for row in rows)
 
-    def get_chapter(self, chapter_id: UUID) -> Chapter | None:
-        return self._get_model("chapters", "chapter_id", chapter_id, Chapter)
+    def get_volume(self, volume_id: UUID) -> Volume | None:
+        return self._get_model("volumes", "volume_id", volume_id, Volume)
 
-    def chapter_scenes(self, chapter_id: UUID) -> tuple[tuple[Scene, int], ...]:
+    def volume_chapters(self, volume_id: UUID) -> tuple[tuple[Chapter, int], ...]:
         with self._connection() as connection:
             rows = connection.execute(
                 """
-                SELECT s.payload_json, link.scene_number_in_chapter
-                FROM chapter_scenes AS link
-                JOIN scenes AS s ON s.scene_id = link.scene_id
-                WHERE link.chapter_id = ?
-                ORDER BY link.scene_number_in_chapter
+                SELECT s.payload_json, link.chapter_number_in_volume
+                FROM volume_chapters AS link
+                JOIN chapters AS s ON s.chapter_id = link.chapter_id
+                WHERE link.volume_id = ?
+                ORDER BY link.chapter_number_in_volume
                 """,
-                (str(chapter_id),),
+                (str(volume_id),),
             ).fetchall()
         return tuple(
             (
-                Scene.from_json(row["payload_json"]),
-                row["scene_number_in_chapter"],
+                Chapter.from_json(row["payload_json"]),
+                row["chapter_number_in_volume"],
             )
             for row in rows
         )
+
+    def get_volume_summary(
+        self,
+        volume_id: UUID,
+    ) -> tuple[VolumeSummary, bool] | None:
+        projected = self._get_navigation_summary(
+            "volume",
+            "volume_id",
+            volume_id,
+        )
+        if projected is None:
+            return None
+        payload, stale = projected
+        return VolumeSummary.from_json(payload), stale
 
     def get_chapter_summary(
         self,
@@ -313,36 +327,22 @@ class SQLiteProjectionQueries:
         payload, stale = projected
         return ChapterSummary.from_json(payload), stale
 
-    def get_scene_summary(
+    def get_chapter_trace(
         self,
-        scene_id: UUID,
-    ) -> tuple[SceneSummary, bool] | None:
-        projected = self._get_navigation_summary(
-            "scene",
-            "scene_id",
-            scene_id,
-        )
-        if projected is None:
-            return None
-        payload, stale = projected
-        return SceneSummary.from_json(payload), stale
-
-    def get_scene_trace(
-        self,
-        scene_id: UUID,
-    ) -> tuple[SceneTrace, bool] | None:
+        chapter_id: UUID,
+    ) -> tuple[ChapterTrace, bool] | None:
         with self._connection() as connection:
             row = connection.execute(
                 """
                 SELECT payload_json, is_stale
-                FROM scene_traces
-                WHERE scene_id = ?
+                FROM chapter_traces
+                WHERE chapter_id = ?
                 """,
-                (str(scene_id),),
+                (str(chapter_id),),
             ).fetchone()
         if row is None:
             return None
-        return SceneTrace.from_json(row["payload_json"]), bool(row["is_stale"])
+        return ChapterTrace.from_json(row["payload_json"]), bool(row["is_stale"])
 
     def entity_occurrences(
         self,
@@ -353,15 +353,15 @@ class SQLiteProjectionQueries:
         with self._connection() as connection:
             rows = connection.execute(
                 """
-                SELECT c.payload_json AS chapter_json,
-                       s.payload_json AS scene_json,
+                SELECT c.payload_json AS volume_json,
+                       s.payload_json AS chapter_json,
                        t.payload_json AS trace_json,
                        o.payload_json AS occurrence_json,
                        t.is_stale
-                FROM scene_entity_occurrences AS o
-                JOIN scene_traces AS t ON t.scene_id = o.scene_id
-                JOIN scenes AS s ON s.scene_id = o.scene_id
-                JOIN chapters AS c ON c.chapter_id = t.chapter_id
+                FROM chapter_entity_occurrences AS o
+                JOIN chapter_traces AS t ON t.chapter_id = o.chapter_id
+                JOIN chapters AS s ON s.chapter_id = o.chapter_id
+                JOIN volumes AS c ON c.volume_id = t.volume_id
                 WHERE o.entity_id = ? AND s.narrative_order < ?
                 ORDER BY s.narrative_order, o.occurrence_order
                 """,
@@ -369,10 +369,10 @@ class SQLiteProjectionQueries:
             ).fetchall()
         return tuple(
             EntityOccurrenceItem(
+                volume=Volume.from_json(row["volume_json"]),
                 chapter=Chapter.from_json(row["chapter_json"]),
-                scene=Scene.from_json(row["scene_json"]),
-                scene_trace=SceneTrace.from_json(row["trace_json"]),
-                occurrence=SceneEntityOccurrence.from_json(row["occurrence_json"]),
+                chapter_trace=ChapterTrace.from_json(row["trace_json"]),
+                occurrence=ChapterEntityOccurrence.from_json(row["occurrence_json"]),
                 stale=bool(row["is_stale"]),
             )
             for row in rows
@@ -439,9 +439,9 @@ class SQLiteProjectionQueries:
         return tuple(
             SummarySearchHit(
                 summary=(
-                    ChapterSummary.from_json(row["payload_json"])
-                    if row["summary_kind"] == "chapter"
-                    else SceneSummary.from_json(row["payload_json"])
+                    VolumeSummary.from_json(row["payload_json"])
+                    if row["summary_kind"] == "volume"
+                    else ChapterSummary.from_json(row["payload_json"])
                 ),
                 stale=bool(row["is_stale"]),
                 retrieval_method=method,
@@ -537,7 +537,7 @@ class SQLiteProjectionQueries:
         *,
         participant_entity_id: UUID | None = None,
         location_entity_id: UUID | None = None,
-        source_scene_id: UUID | None = None,
+        source_chapter_id: UUID | None = None,
         order: EventOrder = EventOrder.NARRATIVE,
     ) -> tuple[Event, ...]:
         where: list[str] = []
@@ -562,9 +562,9 @@ class SQLiteProjectionQueries:
                 """
             )
             parameters.append(str(location_entity_id))
-        if source_scene_id is not None:
-            where.append("e.source_scene_id = ?")
-            parameters.append(str(source_scene_id))
+        if source_chapter_id is not None:
+            where.append("e.source_chapter_id = ?")
+            parameters.append(str(source_chapter_id))
 
         where_sql = f"WHERE {' AND '.join(where)}" if where else ""
         if order is EventOrder.NARRATIVE:
@@ -627,16 +627,16 @@ class SQLiteProjectionQueries:
             ).fetchall()
         return tuple(SourceRef.from_json(row["payload_json"]) for row in rows)
 
-    def source_refs_for_scene(self, scene_id: UUID) -> tuple[SourceRef, ...]:
+    def source_refs_for_chapter(self, chapter_id: UUID) -> tuple[SourceRef, ...]:
         with self._connection() as connection:
             rows = connection.execute(
                 """
                 SELECT payload_json
                 FROM source_refs
-                WHERE scene_id = ?
+                WHERE chapter_id = ?
                 ORDER BY fragment_ordinal, source_ref_id
                 """,
-                (str(scene_id),),
+                (str(chapter_id),),
             ).fetchall()
         return tuple(SourceRef.from_json(row["payload_json"]) for row in rows)
 
@@ -721,7 +721,7 @@ def _write_snapshot(
             """
             INSERT INTO ledger_entries(
                 ledger_sequence, ledger_entry_id, base_revision, result_revision,
-                approved_at, source_scene_id, schema_version, payload_json
+                approved_at, source_chapter_id, schema_version, payload_json
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
@@ -730,7 +730,7 @@ def _write_snapshot(
                 entry.base_revision,
                 result_revision,
                 entry.approved_at.isoformat(),
-                _uuid(entry.source_scene_id),
+                _uuid(entry.source_chapter_id),
                 entry.schema_version,
                 entry.to_canonical_json(),
             ),
@@ -800,31 +800,33 @@ def _write_snapshot(
             ),
         )
 
-    for scene in snapshot.scenes:
-        story = _story_columns(scene.story_time)
+    for chapter in snapshot.chapters:
+        story = _story_columns(chapter.story_time)
         connection.execute(
             """
-            INSERT INTO scenes(
-                scene_id, chapter_id, narrative_order, timeline_id,
+            INSERT INTO chapters(
+                chapter_id, volume_id, chapter_number, title, narrative_order, timeline_id,
                 story_time_kind, story_ordinal_start, story_ordinal_end,
                 story_text_start, story_text_end, story_time_json,
                 pov_entity_id, location_entity_id, status, source_document_id,
                 revision, schema_version, ledger_sequence, payload_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                str(scene.scene_id),
-                _uuid(scene.chapter_id),
-                scene.narrative_order,
+                str(chapter.chapter_id),
+                _uuid(chapter.volume_id),
+                chapter.chapter_number,
+                chapter.title,
+                chapter.narrative_order,
                 *story,
-                _uuid(scene.pov_entity_id),
-                _uuid(scene.location_entity_id),
-                scene.status.value,
-                str(scene.source_document_id),
-                scene.revision,
-                scene.schema_version,
-                record_sequences[("scene", scene.scene_id)],
-                scene.to_canonical_json(),
+                _uuid(chapter.pov_entity_id),
+                _uuid(chapter.location_entity_id),
+                chapter.status.value,
+                str(chapter.source_document_id),
+                chapter.revision,
+                chapter.schema_version,
+                record_sequences[("chapter", chapter.chapter_id)],
+                chapter.to_canonical_json(),
             ),
         )
 
@@ -832,7 +834,7 @@ def _write_snapshot(
         connection.execute(
             """
             INSERT INTO source_refs(
-                source_ref_id, document_id, scene_id, document_revision,
+                source_ref_id, document_id, chapter_id, document_revision,
                 fragment_ordinal, quote_hash, excerpt, schema_version,
                 ledger_sequence, payload_json
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -840,7 +842,7 @@ def _write_snapshot(
             (
                 str(source_ref.source_ref_id),
                 str(source_ref.document_id),
-                str(source_ref.scene_id),
+                str(source_ref.chapter_id),
                 source_ref.document_revision,
                 source_ref.fragment_ordinal,
                 source_ref.quote_hash,
@@ -856,14 +858,14 @@ def _write_snapshot(
         connection.execute(
             """
             INSERT INTO canon_changesets(
-                change_set_id, base_revision, source_scene_id, approved_at,
+                change_set_id, base_revision, source_chapter_id, approved_at,
                 schema_version, ledger_sequence, payload_json
             ) VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 str(change_set.change_set_id),
                 change_set.base_revision,
-                _uuid(change_set.source_scene_id),
+                _uuid(change_set.source_chapter_id),
                 change_set.approved_at.isoformat(),
                 change_set.schema_version,
                 sequence,
@@ -915,7 +917,7 @@ def _write_snapshot(
                 event_id, event_type, timeline_id, story_time_kind,
                 story_ordinal_start, story_ordinal_end, story_text_start,
                 story_text_end, story_time_json, narrative_order,
-                source_scene_id, summary, canon_status, schema_version,
+                source_chapter_id, summary, canon_status, schema_version,
                 ledger_sequence, payload_json
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
@@ -924,7 +926,7 @@ def _write_snapshot(
                 event.event_type,
                 *story,
                 event.narrative_order,
-                str(event.source_scene_id),
+                str(event.source_chapter_id),
                 event.summary,
                 event.canon_status.value,
                 event.schema_version,
@@ -1028,7 +1030,7 @@ def _write_run_indexes(
     connection.executemany(
         """
         INSERT INTO writing_sessions(
-            writing_session_id, project_id, target_scene_id, target_chapter_id,
+            writing_session_id, project_id, target_chapter_id, target_volume_id,
             target_narrative_order, base_canon_revision, base_intent_revision,
             status, payload_json
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -1037,8 +1039,8 @@ def _write_run_indexes(
             (
                 str(session.writing_session_id),
                 str(session.project_id),
-                str(session.target_scene_id),
                 str(session.target_chapter_id),
+                str(session.target_volume_id),
                 session.target_narrative_order,
                 session.base_canon_revision,
                 session.base_intent_revision,
@@ -1070,7 +1072,7 @@ def _write_run_indexes(
         """
         INSERT INTO retrieved_sources(
             retrieved_source_id, writing_session_id, retrieval_kind,
-            scene_id, document_id, document_revision, payload_json
+            chapter_id, document_id, document_revision, payload_json
         ) VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
         [
@@ -1078,7 +1080,7 @@ def _write_run_indexes(
                 str(source.retrieved_source_id),
                 str(source.writing_session_id),
                 source.retrieval_kind.value,
-                _uuid(source.scene_id),
+                _uuid(source.chapter_id),
                 _uuid(source.document_id),
                 source.document_revision,
                 source.to_canonical_json(),
@@ -1132,72 +1134,72 @@ def _write_navigation_memory(
     navigation: NavigationSourceSnapshot,
 ) -> None:
     try:
-        validate_chapter_bindings(navigation.chapters, snapshot.scenes)
-        chapters = {chapter.chapter_id: chapter for chapter in navigation.chapters}
-        scenes = {scene.scene_id: scene for scene in snapshot.scenes}
+        validate_volume_bindings(navigation.volumes, snapshot.chapters)
+        volumes = {volume.volume_id: volume for volume in navigation.volumes}
+        chapters = {chapter.chapter_id: chapter for chapter in snapshot.chapters}
         documents = {document.document_id: document for document in snapshot.documents}
         entity_ids = {entity.entity_id for entity in snapshot.entities}
 
-        for chapter in navigation.chapters:
+        for volume in navigation.volumes:
             connection.execute(
                 """
-                INSERT INTO chapters(
-                    chapter_id, chapter_number, title, schema_version, payload_json
+                INSERT INTO volumes(
+                    volume_id, volume_number, title, schema_version, payload_json
                 ) VALUES (?, ?, ?, ?, ?)
                 """,
                 (
-                    str(chapter.chapter_id),
-                    chapter.chapter_number,
-                    chapter.title,
-                    chapter.schema_version,
-                    chapter.to_canonical_json(),
+                    str(volume.volume_id),
+                    volume.volume_number,
+                    volume.title,
+                    volume.schema_version,
+                    volume.to_canonical_json(),
                 ),
             )
             connection.executemany(
                 """
-                INSERT INTO chapter_scenes(
-                    chapter_id, scene_id, scene_number_in_chapter
+                INSERT INTO volume_chapters(
+                    volume_id, chapter_id, chapter_number_in_volume
                 ) VALUES (?, ?, ?)
                 """,
                 [
-                    (str(chapter.chapter_id), str(scene_id), scene_number)
-                    for scene_number, scene_id in enumerate(chapter.scene_ids, start=1)
+                    (str(volume.volume_id), str(chapter_id), chapter_number)
+                    for chapter_number, chapter_id in enumerate(volume.chapter_ids, start=1)
                 ],
             )
 
-        for trace in navigation.scene_traces:
+        for trace in navigation.chapter_traces:
+            volume = volumes.get(trace.volume_id)
             chapter = chapters.get(trace.chapter_id)
-            scene = scenes.get(trace.scene_id)
             document = documents.get(trace.source_document_id)
+            if volume is None:
+                raise ValueError(f"Chapter Trace references an unknown Volume: {trace.volume_id}")
             if chapter is None:
-                raise ValueError(f"Scene Trace references an unknown Chapter: {trace.chapter_id}")
-            if scene is None:
-                raise ValueError(f"Scene Trace references an unknown Scene: {trace.scene_id}")
+                raise ValueError(f"Chapter Trace references an unknown Chapter: {trace.chapter_id}")
             if document is None:
                 raise ValueError(
-                    f"Scene Trace references an unknown Document: {trace.source_document_id}"
+                    f"Chapter Trace references an unknown Document: {trace.source_document_id}"
                 )
             _validate_navigation_entities(
                 tuple(item.entity_id for item in trace.entity_occurrences),
                 entity_ids,
             )
-            stale = scene_trace_is_stale(
+            stale = chapter_trace_is_stale(
                 trace,
+                volume=volume,
                 chapter=chapter,
-                scene=scene,
                 document=document,
             )
             connection.execute(
                 """
-                INSERT INTO scene_traces(
-                    scene_id, scene_trace_id, chapter_id, source_document_id,
+                INSERT INTO chapter_traces(
+                    chapter_id, chapter_trace_id, volume_id, source_document_id,
                     source_revision, is_stale, schema_version, payload_json
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    str(trace.scene_id),
-                    str(trace.scene_trace_id),
                     str(trace.chapter_id),
+                    str(trace.chapter_trace_id),
+                    str(trace.volume_id),
                     str(trace.source_document_id),
                     trace.source_revision,
                     int(stale),
@@ -1207,14 +1209,14 @@ def _write_navigation_memory(
             )
             connection.executemany(
                 """
-                INSERT INTO scene_entity_occurrences(
-                    scene_id, entity_id, occurrence_order, presence_kind,
+                INSERT INTO chapter_entity_occurrences(
+                    chapter_id, entity_id, occurrence_order, presence_kind,
                     prominence, payload_json
                 ) VALUES (?, ?, ?, ?, ?, ?)
                 """,
                 [
                     (
-                        str(trace.scene_id),
+                        str(trace.chapter_id),
                         str(occurrence.entity_id),
                         occurrence_order,
                         occurrence.presence_kind.value,
@@ -1228,40 +1230,42 @@ def _write_navigation_memory(
                 ],
             )
 
-        scene_summaries: dict[UUID, SceneSummary] = {}
-        stale_scene_ids: set[UUID] = set()
-        for summary in navigation.scene_summaries:
+        chapter_summaries: dict[UUID, ChapterSummary] = {}
+        stale_chapter_ids: set[UUID] = set()
+        for summary in navigation.chapter_summaries:
+            volume = volumes.get(summary.volume_id)
             chapter = chapters.get(summary.chapter_id)
-            scene = scenes.get(summary.scene_id)
             document = documents.get(summary.source_document_id)
+            if volume is None:
+                raise ValueError(
+                    f"Chapter Summary references an unknown Volume: {summary.volume_id}"
+                )
             if chapter is None:
                 raise ValueError(
-                    f"Scene Summary references an unknown Chapter: {summary.chapter_id}"
+                    f"Chapter Summary references an unknown Chapter: {summary.chapter_id}"
                 )
-            if scene is None:
-                raise ValueError(f"Scene Summary references an unknown Scene: {summary.scene_id}")
             if document is None:
                 raise ValueError(
-                    f"Scene Summary references an unknown Document: {summary.source_document_id}"
+                    f"Chapter Summary references an unknown Document: {summary.source_document_id}"
                 )
-            stale = scene_summary_is_stale(
+            stale = chapter_summary_is_stale(
                 summary,
+                volume=volume,
                 chapter=chapter,
-                scene=scene,
                 document=document,
             )
             _validate_navigation_entities(summary.main_entity_ids, entity_ids)
             if stale:
-                stale_scene_ids.add(summary.scene_id)
-            scene_summaries[summary.scene_id] = summary
+                stale_chapter_ids.add(summary.chapter_id)
+            chapter_summaries[summary.chapter_id] = summary
             _insert_navigation_summary(
                 connection,
-                summary_key=f"scene:{summary.scene_id}",
-                summary_kind="scene",
+                summary_key=f"chapter:{summary.chapter_id}",
+                summary_kind="chapter",
+                volume_id=summary.volume_id,
                 chapter_id=summary.chapter_id,
-                scene_id=summary.scene_id,
                 source_revision=summary.source_revision,
-                max_narrative_order=scene.narrative_order,
+                max_narrative_order=chapter.narrative_order,
                 summary=summary.summary,
                 stale=stale,
                 payload_json=summary.to_canonical_json(),
@@ -1269,28 +1273,28 @@ def _write_navigation_memory(
                 main_entity_ids=summary.main_entity_ids,
             )
 
-        for summary in navigation.chapter_summaries:
-            chapter = chapters.get(summary.chapter_id)
-            if chapter is None:
+        for summary in navigation.volume_summaries:
+            volume = volumes.get(summary.volume_id)
+            if volume is None:
                 raise ValueError(
-                    f"Chapter Summary references an unknown Chapter: {summary.chapter_id}"
+                    f"Volume Summary references an unknown Volume: {summary.volume_id}"
                 )
-            stale = chapter_summary_is_stale(
+            stale = volume_summary_is_stale(
                 summary,
-                chapter=chapter,
-                scene_summaries=scene_summaries,
-                stale_scene_ids=stale_scene_ids,
+                volume=volume,
+                chapter_summaries=chapter_summaries,
+                stale_chapter_ids=stale_chapter_ids,
             )
             _validate_navigation_entities(summary.main_entity_ids, entity_ids)
             _insert_navigation_summary(
                 connection,
-                summary_key=f"chapter:{summary.chapter_id}",
-                summary_kind="chapter",
-                chapter_id=summary.chapter_id,
-                scene_id=None,
+                summary_key=f"volume:{summary.volume_id}",
+                summary_kind="volume",
+                volume_id=summary.volume_id,
+                chapter_id=None,
                 source_revision=None,
                 max_narrative_order=max(
-                    scenes[scene_id].narrative_order for scene_id in chapter.scene_ids
+                    chapters[chapter_id].narrative_order for chapter_id in volume.chapter_ids
                 ),
                 summary=summary.summary,
                 stale=stale,
@@ -1324,8 +1328,8 @@ def _insert_navigation_summary(
     *,
     summary_key: str,
     summary_kind: str,
-    chapter_id: UUID,
-    scene_id: UUID | None,
+    volume_id: UUID,
+    chapter_id: UUID | None,
     source_revision: str | None,
     max_narrative_order: int,
     summary: str,
@@ -1337,15 +1341,15 @@ def _insert_navigation_summary(
     connection.execute(
         """
         INSERT INTO navigation_summaries(
-            summary_key, summary_kind, chapter_id, scene_id, source_revision,
+            summary_key, summary_kind, volume_id, chapter_id, source_revision,
             max_narrative_order, summary, is_stale, schema_version, payload_json
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             summary_key,
             summary_kind,
-            str(chapter_id),
-            _uuid(scene_id),
+            str(volume_id),
+            _uuid(chapter_id),
             source_revision,
             max_narrative_order,
             summary,

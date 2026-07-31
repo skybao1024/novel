@@ -7,6 +7,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from novel_application.errors import ManuscriptReadError, RevisionConflictError
+from novel_core import manuscript_revision
 
 
 class FilesystemManuscriptStore:
@@ -49,6 +50,45 @@ class FilesystemManuscriptStore:
         except OSError as exc:
             raise ManuscriptReadError(
                 f"cannot install manuscript document: {relative_path}"
+            ) from exc
+        finally:
+            temporary.unlink(missing_ok=True)
+
+    def replace_document(
+        self,
+        relative_path: str,
+        *,
+        expected_revision: str,
+        content: bytes,
+    ) -> None:
+        path = self._resolve(relative_path)
+        if not path.is_file():
+            raise RevisionConflictError(
+                f"revision target manuscript does not exist: {relative_path}"
+            )
+        try:
+            current = path.read_bytes()
+        except OSError as exc:
+            raise ManuscriptReadError(
+                f"cannot inspect manuscript document: {relative_path}"
+            ) from exc
+        if current == content:
+            return
+        if manuscript_revision(current) != expected_revision:
+            raise RevisionConflictError(
+                f"manuscript no longer matches revision base: {relative_path}"
+            )
+
+        temporary = path.with_name(f".{path.name}.{uuid4()}.tmp")
+        try:
+            with temporary.open("xb") as stream:
+                stream.write(content)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temporary, path)
+        except OSError as exc:
+            raise ManuscriptReadError(
+                f"cannot replace manuscript document: {relative_path}"
             ) from exc
         finally:
             temporary.unlink(missing_ok=True)

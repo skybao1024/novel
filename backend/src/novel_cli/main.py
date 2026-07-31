@@ -25,6 +25,7 @@ from novel_adapters.filesystem import (
     DiagnosticRecordNotFoundError,
     FilesystemBootstrapRunStore,
     FilesystemCanonLedgerStore,
+    FilesystemChapterTraceBackfillStore,
     FilesystemDiagnosticLog,
     FilesystemIntentRevisionStore,
     FilesystemIntentStore,
@@ -37,7 +38,6 @@ from novel_adapters.filesystem import (
     FilesystemProjectWriteLock,
     FilesystemPublicationStore,
     FilesystemRunIndexStore,
-    FilesystemSceneTraceBackfillStore,
     FilesystemWritingRunStore,
     default_app_data_directory,
 )
@@ -49,7 +49,9 @@ from novel_application import (
     ApprovalMismatchError,
     BootstrapService,
     CanonQueryService,
+    ChapterHistoryAccessError,
     ChapterNotFoundError,
+    ChapterTraceBackfillService,
     DraftService,
     EntityResolutionService,
     FullTextSearchUnavailableError,
@@ -82,11 +84,9 @@ from novel_application import (
     PublicationService,
     ReviewService,
     RevisionConflictError,
-    SceneHistoryAccessError,
-    SceneNotFoundError,
-    SceneTraceBackfillService,
     SessionNavigationService,
     TraceBackfillRecoveryRequiredError,
+    VolumeNotFoundError,
     WorkflowNotFoundError,
     WorkflowStateError,
     WritingSessionService,
@@ -95,15 +95,15 @@ from novel_core import (
     SCHEMA_VERSION,
     BootstrapDraft,
     BootstrapEntityDraft,
-    ChapterSummary,
+    ChapterTraceDraft,
     CharacterStatePhase,
     EventChainDirection,
     IntentContent,
     ProjectCatalogEntry,
     ProjectManifest,
     ReviewRecommendation,
-    SceneTraceDraft,
     StoryTime,
+    VolumeSummary,
 )
 from novel_core.canon.ledger import LedgerRecord
 from novel_core.schemas import schema_documents
@@ -144,8 +144,8 @@ class _DiagnosticContext:
             "review_id",
             "publication_id",
             "backfill_id",
+            "volume_id",
             "chapter_id",
-            "scene_id",
             "character_id",
             "event_id",
             "source_ref_id",
@@ -336,12 +336,31 @@ def _build_parser() -> argparse.ArgumentParser:
     session_sub = session.add_subparsers(dest="subcommand", required=True)
     session_start = session_sub.add_parser("start")
     session_start.add_argument("--author-goal", required=True)
-    session_start.add_argument("--story-time", type=Path, required=True)
-    session_start.add_argument("--chapter-id", type=UUID)
+    session_start.add_argument("--story-time", type=Path)
+    session_start.add_argument("--revise-chapter-id", type=UUID)
+    session_start.add_argument("--volume-id", type=UUID)
+    session_start.add_argument("--new-volume-number", type=int)
+    session_start.add_argument("--new-volume-title")
     session_start.add_argument("--new-chapter-number", type=int)
     session_start.add_argument("--new-chapter-title")
-    session_start.add_argument("--before-scene-id", type=UUID)
-    session_start.add_argument("--after-scene-id", type=UUID)
+    session_start.add_argument(
+        "--before-chapter-id",
+        type=UUID,
+        metavar="PREVIOUS_CHAPTER_ID",
+        help=(
+            "stable ID of the approved Chapter immediately before the new Chapter; "
+            "use this alone to append after the last Chapter"
+        ),
+    )
+    session_start.add_argument(
+        "--after-chapter-id",
+        type=UUID,
+        metavar="NEXT_CHAPTER_ID",
+        help=(
+            "stable ID of the approved Chapter immediately after the new Chapter; "
+            "use this alone to insert before the first Chapter"
+        ),
+    )
     session_start.add_argument("--constraint", action="append", default=[])
     session_start.add_argument("--pov-entity-id", type=UUID)
     session_start.add_argument("--location-entity-id", type=UUID)
@@ -351,6 +370,8 @@ def _build_parser() -> argparse.ArgumentParser:
     session_context.add_argument("--session-id", type=UUID, required=True)
     session_continuity = session_sub.add_parser("continuity-status")
     session_continuity.add_argument("--session-id", type=UUID, required=True)
+    session_revision_source = session_sub.add_parser("revision-source")
+    session_revision_source.add_argument("--session-id", type=UUID, required=True)
     session_close = session_sub.add_parser("close")
     session_close.add_argument("--session-id", type=UUID, required=True)
 
@@ -364,7 +385,7 @@ def _build_parser() -> argparse.ArgumentParser:
     query_sub = query.add_subparsers(dest="subcommand", required=True)
     character = query_sub.add_parser("character")
     character.add_argument("character_id", type=UUID)
-    character.add_argument("--at-scene", type=UUID, required=True)
+    character.add_argument("--at-chapter", type=UUID, required=True)
     character.add_argument("--session-id", type=UUID)
     character.add_argument(
         "--phase",
@@ -383,21 +404,21 @@ def _build_parser() -> argparse.ArgumentParser:
 
     memory = subparsers.add_parser("memory")
     memory_sub = memory.add_subparsers(dest="subcommand", required=True)
+    memory_volumes = memory_sub.add_parser("volumes")
+    memory_volumes.add_argument("--session-id", type=UUID)
     memory_chapters = memory_sub.add_parser("chapters")
+    memory_chapters.add_argument("--volume-id", type=UUID, required=True)
     memory_chapters.add_argument("--session-id", type=UUID)
-    memory_scenes = memory_sub.add_parser("scenes")
-    memory_scenes.add_argument("--chapter-id", type=UUID, required=True)
-    memory_scenes.add_argument("--session-id", type=UUID)
     memory_search = memory_sub.add_parser("search-summaries")
     memory_search.add_argument("--query")
     memory_search.add_argument("--entity", type=UUID)
-    memory_search.add_argument("--before-scene", type=UUID)
+    memory_search.add_argument("--before-chapter", type=UUID)
     memory_search.add_argument("--session-id", type=UUID)
     memory_search.add_argument("--limit", type=int, default=20)
-    memory_read = memory_sub.add_parser("read-scene")
+    memory_read = memory_sub.add_parser("read-chapter")
+    memory_read.add_argument("--volume-id", type=UUID, required=True)
     memory_read.add_argument("--chapter-id", type=UUID, required=True)
-    memory_read.add_argument("--scene-id", type=UUID, required=True)
-    memory_read.add_argument("--before-scene", type=UUID)
+    memory_read.add_argument("--before-chapter", type=UUID)
     memory_read.add_argument("--session-id", type=UUID)
     memory_entity_line = memory_sub.add_parser("entity-line")
     memory_entity_line.add_argument("--entity-id", type=UUID, required=True)
@@ -447,15 +468,15 @@ def _build_parser() -> argparse.ArgumentParser:
     publish_prepare = publish_sub.add_parser("prepare")
     publish_prepare.add_argument("--session-id", type=UUID, required=True)
     publish_prepare.add_argument("--draft-revision", required=True)
-    publish_prepare.add_argument("--scene-summary", type=Path, required=True)
     publish_prepare.add_argument("--chapter-summary", type=Path, required=True)
-    publish_prepare.add_argument("--scene-trace", type=Path, required=True)
+    publish_prepare.add_argument("--volume-summary", type=Path, required=True)
+    publish_prepare.add_argument("--chapter-trace", type=Path, required=True)
     publish_prepare.add_argument("--review-id", type=UUID, action="append", required=True)
-    publish_prepare.add_argument("--scene-main-entity-id", type=UUID, action="append", default=[])
-    publish_prepare.add_argument("--scene-key-change", action="append", default=[])
-    publish_prepare.add_argument("--scene-open-question", action="append", default=[])
+    publish_prepare.add_argument("--chapter-main-entity-id", type=UUID, action="append", default=[])
+    publish_prepare.add_argument("--chapter-key-change", action="append", default=[])
+    publish_prepare.add_argument("--chapter-open-question", action="append", default=[])
     publish_prepare.add_argument(
-        "--chapter-main-entity-id",
+        "--volume-main-entity-id",
         type=UUID,
         action="append",
         default=[],
@@ -476,15 +497,15 @@ def _build_parser() -> argparse.ArgumentParser:
     trace_backfill = subparsers.add_parser("trace-backfill")
     trace_backfill_sub = trace_backfill.add_subparsers(dest="subcommand", required=True)
     trace_backfill_source = trace_backfill_sub.add_parser("source")
+    trace_backfill_source.add_argument("--volume-id", type=UUID, required=True)
     trace_backfill_source.add_argument("--chapter-id", type=UUID, required=True)
-    trace_backfill_source.add_argument("--scene-id", type=UUID, required=True)
     trace_backfill_entity_line = trace_backfill_sub.add_parser("entity-line")
     trace_backfill_entity_line.add_argument("--entity-id", type=UUID, required=True)
     trace_backfill_prepare = trace_backfill_sub.add_parser("prepare")
+    trace_backfill_prepare.add_argument("--volume-id", type=UUID, required=True)
     trace_backfill_prepare.add_argument("--chapter-id", type=UUID, required=True)
-    trace_backfill_prepare.add_argument("--scene-id", type=UUID, required=True)
     trace_backfill_prepare.add_argument("--source-revision", required=True)
-    trace_backfill_prepare.add_argument("--scene-trace", type=Path, required=True)
+    trace_backfill_prepare.add_argument("--chapter-trace", type=Path, required=True)
     trace_backfill_inspect = trace_backfill_sub.add_parser("inspect")
     trace_backfill_inspect.add_argument("--backfill-id", type=UUID, required=True)
     trace_backfill_approve = trace_backfill_sub.add_parser("approve")
@@ -566,7 +587,7 @@ def _dispatch(
         return data, ()
     if args.command == "session":
         data = _session_command(args, services)
-        if args.subcommand in {"start", "close"}:
+        if args.subcommand in {"start", "revision-source", "close"}:
             _rebuild_projection(services, diagnostic_context)
         return data, ()
     if args.command == "draft":
@@ -628,20 +649,20 @@ def _dispatch(
     if args.command == "query":
         if args.subcommand == "character":
             if args.session_id is not None:
-                services.session_memory.validate_canon_scene_ids(
+                services.session_memory.validate_canon_chapter_ids(
                     args.session_id,
-                    (args.at_scene,),
+                    (args.at_chapter,),
                 )
             state = services.queries.character_state(
                 args.character_id,
-                at_scene_id=args.at_scene,
+                at_chapter_id=args.at_chapter,
                 phase=CharacterStatePhase(args.phase),
             )
             if args.session_id is not None:
                 services.session_memory.record_canon_query(
                     args.session_id,
                     source_refs=_character_source_refs(state),
-                    reason=f"Character state at Scene {args.at_scene}",
+                    reason=f"Character state at Chapter {args.at_chapter}",
                 )
                 _rebuild_projection(services, diagnostic_context)
             return state.model_dump(mode="json"), tuple(item.message for item in state.warnings)
@@ -651,9 +672,9 @@ def _dispatch(
             max_depth=args.depth,
         )
         if args.session_id is not None:
-            services.session_memory.validate_canon_scene_ids(
+            services.session_memory.validate_canon_chapter_ids(
                 args.session_id,
-                tuple(event.source_scene_id for event in chain.events),
+                tuple(event.source_chapter_id for event in chain.events),
             )
             services.session_memory.record_canon_query(
                 args.session_id,
@@ -732,12 +753,17 @@ def _session_command(args: argparse.Namespace, services: _ServiceBundle) -> dict
     if args.subcommand == "start":
         session = services.sessions.start(
             author_goal=args.author_goal,
-            target_story_time=_read_model(args.story_time, StoryTime),
-            chapter_id=args.chapter_id,
+            target_story_time=(
+                _read_model(args.story_time, StoryTime) if args.story_time is not None else None
+            ),
+            volume_id=args.volume_id,
+            new_volume_number=args.new_volume_number,
+            new_volume_title=args.new_volume_title,
             new_chapter_number=args.new_chapter_number,
             new_chapter_title=args.new_chapter_title,
-            before_scene_id=args.before_scene_id,
-            after_scene_id=args.after_scene_id,
+            before_chapter_id=args.before_chapter_id,
+            after_chapter_id=args.after_chapter_id,
+            revise_chapter_id=args.revise_chapter_id,
             creative_constraints=tuple(args.constraint),
             pov_entity_id=args.pov_entity_id,
             location_entity_id=args.location_entity_id,
@@ -755,6 +781,8 @@ def _session_command(args: argparse.Namespace, services: _ServiceBundle) -> dict
         return services.sessions.context(args.session_id).model_dump(mode="json")
     if args.subcommand == "continuity-status":
         return services.sessions.continuity_status(args.session_id).model_dump(mode="json")
+    if args.subcommand == "revision-source":
+        return _exact_chapter_data(services.session_memory.revision_source(args.session_id))
     return services.sessions.close(args.session_id).model_dump(mode="json")
 
 
@@ -830,14 +858,14 @@ def _publish_command(args: argparse.Namespace, services: _ServiceBundle) -> dict
         publication = services.publications.prepare(
             writing_session_id=args.session_id,
             draft_revision=args.draft_revision,
-            scene_summary_text=_read_text(args.scene_summary),
             chapter_summary_text=_read_text(args.chapter_summary),
-            scene_trace_draft=_read_model(args.scene_trace, SceneTraceDraft),
+            volume_summary_text=_read_text(args.volume_summary),
+            chapter_trace_draft=_read_model(args.chapter_trace, ChapterTraceDraft),
             review_refs=tuple(args.review_id),
-            scene_main_entity_ids=tuple(args.scene_main_entity_id),
-            scene_key_changes=tuple(args.scene_key_change),
-            scene_open_questions=tuple(args.scene_open_question),
             chapter_main_entity_ids=tuple(args.chapter_main_entity_id),
+            chapter_key_changes=tuple(args.chapter_key_change),
+            chapter_open_questions=tuple(args.chapter_open_question),
+            volume_main_entity_ids=tuple(args.volume_main_entity_id),
             canon_records=canon_records,
             intent_revision_id=args.intent_revision_id,
             unresolved_questions=tuple(args.unresolved_question),
@@ -862,15 +890,15 @@ def _trace_backfill_command(
 ) -> dict[str, Any]:
     if args.subcommand == "source":
         source = services.trace_backfills.source(
+            volume_id=args.volume_id,
             chapter_id=args.chapter_id,
-            scene_id=args.scene_id,
         )
         return {
             "schema_version": SCHEMA_VERSION,
             "project_id": str(source.project_id),
             "base_canon_revision": source.base_canon_revision,
+            "volume": source.volume.model_dump(mode="json"),
             "chapter": source.chapter.model_dump(mode="json"),
-            "scene": source.scene.model_dump(mode="json"),
             "document": source.document.model_dump(mode="json"),
             "source_revision": source.source_revision,
             "text": source.text,
@@ -898,14 +926,14 @@ def _trace_backfill_command(
             "entity": result.entity.model_dump(mode="json"),
             "occurrences": [
                 {
+                    "volume": item.volume.model_dump(mode="json"),
                     "chapter": item.chapter.model_dump(mode="json"),
-                    "scene": item.scene.model_dump(mode="json"),
-                    "source_revision": item.scene_trace.source_revision,
+                    "source_revision": item.chapter_trace.source_revision,
                     "stale": item.stale,
                     "occurrence": item.occurrence.model_dump(mode="json"),
                     "mentions": [
                         mention.model_dump(mode="json")
-                        for mention in item.scene_trace.mentions
+                        for mention in item.chapter_trace.mentions
                         if mention.mention_id in item.occurrence.mention_ids
                     ],
                 }
@@ -914,10 +942,10 @@ def _trace_backfill_command(
         }
     if args.subcommand == "prepare":
         backfill = services.trace_backfills.prepare(
+            volume_id=args.volume_id,
             chapter_id=args.chapter_id,
-            scene_id=args.scene_id,
             source_revision=args.source_revision,
-            scene_trace_draft=_read_model(args.scene_trace, SceneTraceDraft),
+            chapter_trace_draft=_read_model(args.chapter_trace, ChapterTraceDraft),
         )
     elif args.subcommand == "inspect":
         backfill = services.trace_backfills.inspect(args.backfill_id)
@@ -1029,17 +1057,17 @@ def _memory_command(
     args: argparse.Namespace,
     services: _ServiceBundle,
 ) -> dict[str, Any]:
-    if args.subcommand == "chapters":
+    if args.subcommand == "volumes":
         items = (
-            services.session_memory.chapters(args.session_id)
+            services.session_memory.volumes(args.session_id)
             if args.session_id is not None
-            else services.memory.chapters()
+            else services.memory.volumes()
         )
         return {
             "schema_version": SCHEMA_VERSION,
-            "chapters": [
+            "volumes": [
                 {
-                    "chapter": item.chapter.model_dump(mode="json"),
+                    "volume": item.volume.model_dump(mode="json"),
                     "summary": (
                         item.summary.model_dump(mode="json") if item.summary is not None else None
                     ),
@@ -1048,19 +1076,19 @@ def _memory_command(
                 for item in items
             ],
         }
-    if args.subcommand == "scenes":
+    if args.subcommand == "chapters":
         items = (
-            services.session_memory.scenes(args.session_id, args.chapter_id)
+            services.session_memory.chapters(args.session_id, args.volume_id)
             if args.session_id is not None
-            else services.memory.scenes(args.chapter_id)
+            else services.memory.chapters(args.volume_id)
         )
         return {
             "schema_version": SCHEMA_VERSION,
-            "chapter_id": str(args.chapter_id),
-            "scenes": [
+            "volume_id": str(args.volume_id),
+            "chapters": [
                 {
-                    "scene": item.scene.model_dump(mode="json"),
-                    "scene_number_in_chapter": item.scene_number_in_chapter,
+                    "chapter": item.chapter.model_dump(mode="json"),
+                    "chapter_number_in_volume": item.chapter_number_in_volume,
                     "summary": (
                         item.summary.model_dump(mode="json") if item.summary is not None else None
                     ),
@@ -1082,7 +1110,7 @@ def _memory_command(
             else services.memory.search_summaries(
                 query=args.query,
                 entity_id=args.entity,
-                before_scene_id=args.before_scene,
+                before_chapter_id=args.before_chapter,
                 limit=args.limit,
             )
         )
@@ -1090,12 +1118,14 @@ def _memory_command(
             "schema_version": SCHEMA_VERSION,
             "query": args.query,
             "entity_id": str(args.entity) if args.entity is not None else None,
-            "before_scene_id": (str(args.before_scene) if args.before_scene is not None else None),
+            "before_chapter_id": (
+                str(args.before_chapter) if args.before_chapter is not None else None
+            ),
             "writing_session_id": (str(args.session_id) if args.session_id is not None else None),
             "hits": [
                 {
                     "summary_kind": (
-                        "chapter" if isinstance(item.summary, ChapterSummary) else "scene"
+                        "volume" if isinstance(item.summary, VolumeSummary) else "chapter"
                     ),
                     "retrieval_method": item.retrieval_method.value,
                     "match_reason": item.match_reason,
@@ -1116,14 +1146,14 @@ def _memory_command(
             "entity": result.entity.model_dump(mode="json"),
             "occurrences": [
                 {
+                    "volume": item.volume.model_dump(mode="json"),
                     "chapter": item.chapter.model_dump(mode="json"),
-                    "scene": item.scene.model_dump(mode="json"),
-                    "source_revision": item.scene_trace.source_revision,
+                    "source_revision": item.chapter_trace.source_revision,
                     "stale": item.stale,
                     "occurrence": item.occurrence.model_dump(mode="json"),
                     "mentions": [
                         mention.model_dump(mode="json")
-                        for mention in item.scene_trace.mentions
+                        for mention in item.chapter_trace.mentions
                         if mention.mention_id in item.occurrence.mention_ids
                     ],
                 }
@@ -1135,33 +1165,39 @@ def _memory_command(
     result = (
         services.session_memory.read(
             args.session_id,
+            volume_id=args.volume_id,
             chapter_id=args.chapter_id,
-            scene_id=args.scene_id,
         )
         if args.session_id is not None
-        else services.memory.read_scene(
+        else services.memory.read_chapter(
+            volume_id=args.volume_id,
             chapter_id=args.chapter_id,
-            scene_id=args.scene_id,
-            before_scene_id=args.before_scene,
+            before_chapter_id=args.before_chapter,
         )
     )
+    return _exact_chapter_data(result)
+
+
+def _exact_chapter_data(result) -> dict[str, Any]:
     return {
         "schema_version": SCHEMA_VERSION,
+        "volume_id": str(result.volume.volume_id),
+        "volume_number": result.volume.volume_number,
+        "volume_title": result.volume.title,
         "chapter_id": str(result.chapter.chapter_id),
         "chapter_number": result.chapter.chapter_number,
         "chapter_title": result.chapter.title,
-        "scene_id": str(result.scene.scene_id),
-        "scene_number_in_chapter": result.scene_number_in_chapter,
+        "chapter_number_in_volume": result.chapter_number_in_volume,
         "document_id": str(result.document.document_id),
         "document_revision": result.document.revision,
-        "story_time": result.scene.story_time.model_dump(mode="json"),
-        "narrative_order": result.scene.narrative_order,
+        "story_time": result.chapter.story_time.model_dump(mode="json"),
+        "narrative_order": result.chapter.narrative_order,
         "pov_entity_id": (
-            str(result.scene.pov_entity_id) if result.scene.pov_entity_id is not None else None
+            str(result.chapter.pov_entity_id) if result.chapter.pov_entity_id is not None else None
         ),
         "location_entity_id": (
-            str(result.scene.location_entity_id)
-            if result.scene.location_entity_id is not None
+            str(result.chapter.location_entity_id)
+            if result.chapter.location_entity_id is not None
             else None
         ),
         "text": result.text,
@@ -1170,8 +1206,8 @@ def _memory_command(
 
 
 def _require_one_boundary(args: argparse.Namespace) -> None:
-    if (args.session_id is None) == (args.before_scene is None):
-        raise ValueError("choose exactly one of --session-id or --before-scene")
+    if (args.session_id is None) == (args.before_chapter is None):
+        raise ValueError("choose exactly one of --session-id or --before-chapter")
 
 
 def _initialize_project(
@@ -1211,7 +1247,7 @@ class _StorageBundle:
         self.intent_revisions = FilesystemIntentRevisionStore(root)
         self.writing = FilesystemWritingRunStore(root)
         self.publication = FilesystemPublicationStore(root)
-        self.trace_backfill = FilesystemSceneTraceBackfillStore(root)
+        self.trace_backfill = FilesystemChapterTraceBackfillStore(root)
         self.manuscripts = FilesystemManuscriptStore(root)
         self.navigation_sources = FilesystemNavigationStore(root)
         self.run_index = FilesystemRunIndexStore(root)
@@ -1270,7 +1306,11 @@ class _ServiceBundle:
             ledger=stores.ledger,
             runs=stores.writing,
         )
-        self.drafts = DraftService(runs=stores.writing, sessions=self.sessions)
+        self.drafts = DraftService(
+            runs=stores.writing,
+            sessions=self.sessions,
+            manuscripts=stores.manuscripts,
+        )
         self.reviews = ReviewService(runs=stores.writing)
         self.publications = PublicationService(
             projects=stores.project_store,
@@ -1288,7 +1328,7 @@ class _ServiceBundle:
             intent_service=self.intent,
             entity_resolution=self.entity_resolution,
         )
-        self.trace_backfills = SceneTraceBackfillService(
+        self.trace_backfills = ChapterTraceBackfillService(
             projects=stores.project_store,
             ledger=stores.ledger,
             projection=stores.projection,
@@ -1644,18 +1684,18 @@ def _map_error(exc: Exception) -> tuple[str, int]:
         return "trace_backfill_recovery_required", EXIT_STORAGE
     if isinstance(exc, WorkflowStateError):
         return "invalid_workflow_state", EXIT_CONFLICT
+    if isinstance(exc, VolumeNotFoundError):
+        return "volume_not_found", EXIT_PROJECT
     if isinstance(exc, ChapterNotFoundError):
         return "chapter_not_found", EXIT_PROJECT
-    if isinstance(exc, SceneNotFoundError):
-        return "scene_not_found", EXIT_PROJECT
     if isinstance(exc, ProjectNotFoundError):
         return "project_not_found", EXIT_PROJECT
     if isinstance(exc, LedgerConflictError):
         return "canon_conflict", EXIT_CONFLICT
     if isinstance(exc, ManuscriptReadError):
         return "manuscript_error", EXIT_INVALID_INPUT
-    if isinstance(exc, SceneHistoryAccessError):
-        return "scene_not_historical", EXIT_INVALID_INPUT
+    if isinstance(exc, ChapterHistoryAccessError):
+        return "chapter_not_historical", EXIT_INVALID_INPUT
     if isinstance(exc, (ValidationError, ValueError, UnicodeDecodeError)):
         return "invalid_input", EXIT_INVALID_INPUT
     if isinstance(exc, ProjectionOutOfDateError):

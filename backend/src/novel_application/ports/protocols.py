@@ -20,6 +20,8 @@ from novel_core import (
     CanonLedgerSnapshot,
     Chapter,
     ChapterSummary,
+    ChapterTrace,
+    ChapterTraceBackfill,
     Document,
     DraftRevision,
     Entity,
@@ -33,11 +35,9 @@ from novel_core import (
     Publication,
     RetrievedSource,
     Review,
-    Scene,
-    SceneSummary,
-    SceneTrace,
-    SceneTraceBackfill,
     SourceRef,
+    Volume,
+    VolumeSummary,
     WritingSession,
 )
 
@@ -88,6 +88,14 @@ class ManuscriptStore(Protocol):
 
 class ManuscriptPublicationStore(ManuscriptStore, Protocol):
     def install_document(self, relative_path: str, content: bytes) -> None: ...
+
+    def replace_document(
+        self,
+        relative_path: str,
+        *,
+        expected_revision: str,
+        content: bytes,
+    ) -> None: ...
 
 
 class IntentStore(Protocol):
@@ -149,12 +157,12 @@ class PublicationStore(Protocol):
     def replace(self, publication: Publication) -> None: ...
 
 
-class SceneTraceBackfillStore(Protocol):
-    def create(self, backfill: SceneTraceBackfill) -> None: ...
+class ChapterTraceBackfillStore(Protocol):
+    def create(self, backfill: ChapterTraceBackfill) -> None: ...
 
-    def load(self, backfill_id: UUID) -> SceneTraceBackfill: ...
+    def load(self, backfill_id: UUID) -> ChapterTraceBackfill: ...
 
-    def replace(self, backfill: SceneTraceBackfill) -> None: ...
+    def replace(self, backfill: ChapterTraceBackfill) -> None: ...
 
 
 class CreationRunStateStore(Protocol):
@@ -162,13 +170,13 @@ class CreationRunStateStore(Protocol):
 
 
 class NavigationSourceStore(Protocol):
-    def save_chapter(self, chapter: Chapter) -> None: ...
-
-    def save_scene_summary(self, summary: SceneSummary) -> None: ...
+    def save_volume(self, volume: Volume) -> None: ...
 
     def save_chapter_summary(self, summary: ChapterSummary) -> None: ...
 
-    def save_scene_trace(self, trace: SceneTrace) -> None: ...
+    def save_volume_summary(self, summary: VolumeSummary) -> None: ...
+
+    def save_chapter_trace(self, trace: ChapterTrace) -> None: ...
 
 
 class ProjectionStore(Protocol):
@@ -190,7 +198,7 @@ class ProjectionQueryPort(Protocol):
 
     def get_document(self, document_id: UUID) -> Document | None: ...
 
-    def get_scene(self, scene_id: UUID) -> Scene | None: ...
+    def get_chapter(self, chapter_id: UUID) -> Chapter | None: ...
 
     def get_event(self, event_id: UUID) -> Event | None: ...
 
@@ -213,7 +221,7 @@ class ProjectionQueryPort(Protocol):
         *,
         participant_entity_id: UUID | None = None,
         location_entity_id: UUID | None = None,
-        source_scene_id: UUID | None = None,
+        source_chapter_id: UUID | None = None,
         order: EventOrder = EventOrder.NARRATIVE,
     ) -> tuple[Event, ...]: ...
 
@@ -226,30 +234,30 @@ class ProjectionQueryPort(Protocol):
 
     def source_refs_for_event(self, event_id: UUID) -> tuple[SourceRef, ...]: ...
 
-    def source_refs_for_scene(self, scene_id: UUID) -> tuple[SourceRef, ...]: ...
+    def source_refs_for_chapter(self, chapter_id: UUID) -> tuple[SourceRef, ...]: ...
 
 
 class NavigationQueryPort(Protocol):
-    def list_chapters(self) -> tuple[Chapter, ...]: ...
+    def list_volumes(self) -> tuple[Volume, ...]: ...
 
-    def get_chapter(self, chapter_id: UUID) -> Chapter | None: ...
+    def get_volume(self, volume_id: UUID) -> Volume | None: ...
 
-    def chapter_scenes(self, chapter_id: UUID) -> tuple[tuple[Scene, int], ...]: ...
+    def volume_chapters(self, volume_id: UUID) -> tuple[tuple[Chapter, int], ...]: ...
+
+    def get_volume_summary(
+        self,
+        volume_id: UUID,
+    ) -> tuple[VolumeSummary, bool] | None: ...
 
     def get_chapter_summary(
         self,
         chapter_id: UUID,
     ) -> tuple[ChapterSummary, bool] | None: ...
 
-    def get_scene_summary(
+    def get_chapter_trace(
         self,
-        scene_id: UUID,
-    ) -> tuple[SceneSummary, bool] | None: ...
-
-    def get_scene_trace(
-        self,
-        scene_id: UUID,
-    ) -> tuple[SceneTrace, bool] | None: ...
+        chapter_id: UUID,
+    ) -> tuple[ChapterTrace, bool] | None: ...
 
     def entity_occurrences(
         self,

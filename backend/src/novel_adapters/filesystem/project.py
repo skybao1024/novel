@@ -36,19 +36,19 @@ class ProjectLayout:
         return self.root / "canon" / "ledger" / "canon.jsonl"
 
     @property
-    def chapters(self) -> Path:
-        return self.root / "structure" / "chapters"
+    def volumes(self) -> Path:
+        return self.root / "structure" / "volumes"
+
+    @property
+    def volume_memory(self) -> Path:
+        return self.root / "memory" / "volumes"
 
     @property
     def chapter_memory(self) -> Path:
         return self.root / "memory" / "chapters"
 
     @property
-    def scene_memory(self) -> Path:
-        return self.root / "memory" / "scenes"
-
-    @property
-    def scene_traces(self) -> Path:
+    def chapter_traces(self) -> Path:
         return self.root / "memory" / "traces"
 
     @property
@@ -95,10 +95,10 @@ class ProjectLayout:
 PROJECT_DIRECTORIES = (
     "intent",
     "canon/ledger",
-    "structure/chapters",
+    "structure/volumes",
     "manuscript",
+    "memory/volumes",
     "memory/chapters",
-    "memory/scenes",
     "memory/traces",
     ".novel/locks",
     ".novel/tmp",

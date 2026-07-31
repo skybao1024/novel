@@ -20,49 +20,55 @@ Writing Session 建立后，Application 返回一个 Creation Context：
 
 - Project ID 和 Session ID；
 - 作者目标；
-- 目标 Scene ID 和 Narrative Order 边界；
+- 目标 Chapter ID 和 Narrative Order 边界；
 - Creative Brief；
 - Writing Rules；
 - Current Outline 中与目标直接相关的部分；
-- 当前 Chapter 信息；
-- 前一个 Scene 的摘要和正式原文入口；
-- 前一个 Scene 所在 Chapter 的连续性窗口 Chapter ID 和有序 Scene ID；
-- 新 Chapter 首场准确的 `required_chapter_heading`，否则为 `null`；
+- 当前 Volume 信息；
+- 前一个 Chapter 的摘要和正式原文入口；
+- 紧邻前一个 Chapter 的连续性窗口 Volume ID 和 Chapter ID；
+- 目标 Chapter number、title 和准确的 `required_chapter_heading`；
 - 主要人物的稀疏 Canon 状态；
 - 当前 base revision；
+- Session 模式；修订模式下准确旧正文 revision 和 revision source Chapter ID；
 - 可继续调用的查询能力。
 
 Creation Context 是确定性的起始视图，不声称包含全部相关历史。它列出的
-`continuity_scene_ids` 是唯一例外：这些是 `before_scene_id` 所在 Chapter 中、位于目标
-Narrative Order 之前的全部批准 Scene，构成保存 Draft 前的有界必读窗口。
+`continuity_chapter_ids` 是唯一例外：存在 `before_chapter_id` 时，它只包含紧邻目标的
+批准 Chapter，构成保存 Draft 前的有界必读窗口。
 
-当前 Writing Session 必须逐一执行 Exact Scene Read，并用
-`session continuity-status` 确认 `satisfied: true`。Application 比对 Scene、Document 和
-revision 以及当前 Session 的 `retrieved_sources`；摘要、`previous_scene_text_available`、
+当前 Writing Session 必须逐一执行 Exact Chapter Read，并用
+`session continuity-status` 确认 `satisfied: true`。Application 比对 Chapter、Document 和
+revision 以及当前 Session 的 `retrieved_sources`；摘要、`previous_chapter_text_available`、
 已有模型上下文、其他 Session 记录或 sub-agent 报告都不能替代。本窗口为空时通常表示
-全书第一 Scene。
+全书第一 Chapter。
 
 Application 只对这个确定的窗口设置 `draft save` 前置条件，不以更广泛的读取次数、摘要
-完整度或结构化记录数量判断语义充分性。更早历史仍按 Chapter Summary → Scene Summary →
+完整度或结构化记录数量判断语义充分性。更早历史仍按 Volume Summary → Chapter Summary →
 稳定 ID → 正式原文导航，由 AI 根据动作、对话、情绪、线索等依赖决定是否继续。
+
+修订模式还必须调用 `session revision-source`。这个入口只能读取 Session 已锁定的目标
+Chapter 和旧 Document revision，并记录为当前 Session 的准确来源；它不放宽其他
+`memory`、Entity 或 Canon 查询的 Narrative Order 边界。连续性窗口和修订源任一未完成，
+`draft save` 都拒绝。
 
 ## 3. 分层导航
 
 默认导航路线：
 
 ```text
-Chapter Summary
-→ Scene Summary
-→ 稳定 Chapter/Scene ID
-→ 正式 Scene 原文
+Volume Summary
+→ Chapter Summary
+→ 稳定 Volume/Chapter ID
+→ 正式 Chapter 原文
 → AI 判断是否继续
 ```
 
-### 3.1 Scene Summary
+### 3.1 Chapter Summary
 
-Scene Summary 只描述一个批准 Scene revision，包含：
+Chapter Summary 只描述一个批准 Chapter revision，包含：
 
-- Scene、Chapter 和 Document ID；
+- Chapter、Volume 和 Document ID；
 - 章内顺序；
 - source revision；
 - 简短 summary；
@@ -72,29 +78,30 @@ Scene Summary 只描述一个批准 Scene revision，包含：
 
 摘要不是 Canon，也不声称覆盖全部对话、动作、心理、伏笔或主题。
 
-### 3.2 Scene Trace
+### 3.2 Chapter Trace
 
-Scene Trace 是绑定一个批准 Scene revision 的 Entity 出现线路。它区分：
+Chapter Trace 是绑定一个批准 Chapter revision 的 Entity 出现线路。它区分：
 
 - 文本 Mention：name、alias、pronoun 或 description；
 - 身份解析：existing、new、anonymous 或 ignored；
-- Scene occurrence：present、mentioned、recalled 或 offstage；
+- Chapter occurrence：present、mentioned、recalled 或 offstage；
 - prominence：focus、supporting、cameo 或 background。
 
-Application 对准确 Draft 扫描当前 Session 边界内可见的 display name 和 Alias，返回精确
-候选及 span。Codex 结合当前人物、地点、Event 和准确历史原文处理同名、称谓、代词和隐含
-指代。精确候选必须被 Scene Trace Draft 覆盖，但匹配本身不决定身份。
+作者确认准确 Draft revision 后，Application 才对该 Draft 扫描当前 Session 边界内可见的
+display name 和 Alias，返回精确候选及 span。Codex 结合当前人物、地点、Event 和准确历史
+原文处理同名、称谓、代词和隐含指代。精确候选必须被 Chapter Trace Draft 覆盖，但匹配
+本身不决定身份。
 
-升级前历史 Scene 的 Trace 通过 `trace-backfill source` 读取目标 Scene 的准确批准正文。
+升级前历史 Chapter 的 Trace 通过 `trace-backfill source` 读取目标 Chapter 的准确批准正文。
 该维护查询不属于 Writing Session，不改变 `retrieved_sources`，并可查看完整当前 Entity
 Registry 以减少重复 Entity；它不得被 Writer 用来绕过 Session Narrative Order 边界。
-回填后的 occurrence 仍只是定位候选，事实判断继续读取准确 Scene 原文。
+回填后的 occurrence 仍只是定位候选，事实判断继续读取准确 Chapter 原文。
 
-### 3.3 Chapter Summary
+### 3.3 Volume Summary
 
-Chapter Summary 从本章当前 Scene Summary 聚合，保存参与的 Scene ID 和摘要 Digest。
+Volume Summary 从本章当前 Chapter Summary 聚合，保存参与的 Chapter ID 和摘要 Digest。
 
-它帮助 AI 选择大致章节，不能覆盖 Scene Summary 或正文含义。
+它帮助 AI 选择大致章节，不能覆盖 Chapter Summary 或正文含义。
 
 ### 3.4 Summary Search
 
@@ -102,7 +109,7 @@ Chapter Summary 从本章当前 Scene Summary 聚合，保存参与的 Scene ID 
 
 - 关键词；
 - Entity ID；
-- Chapter ID；
+- Volume ID；
 - Narrative Order 边界；
 - 摘要 FTS 排序。
 
@@ -112,12 +119,12 @@ Chapter Summary 从本章当前 Scene Summary 聚合，保存参与的 Scene ID 
 
 同一 Writing Session 的所有历史导航命令必须使用相同 Narrative Order 边界：
 
-- Chapter 列表可以返回目录元数据，但不能返回依赖目标或之后 Scene 的 Chapter Summary；
-- Scene 列表不能返回目标 Scene 或之后的摘要；
+- Volume 列表可以返回目录元数据，但不能返回依赖目标或之后 Chapter 的 Volume Summary；
+- Chapter 列表不能返回目标 Chapter 或之后的摘要；
 - Summary Search 不能返回目标边界之后的候选；
-- Exact Scene Read 只能读取目标之前的批准 Scene。
+- Exact Chapter Read 只能读取目标之前的批准 Chapter。
 
-边界由 Session 的 `before_scene_id`、`after_scene_id` 或明确插入位置计算。AI 不能通过换
+边界由 Session 的 `before_chapter_id`、`after_chapter_id` 或明确插入位置计算。AI 不能通过换
 一个查询命令绕过边界。
 
 Reviewer 默认使用与 Writer 相同的读者历史边界。若作者明确要求全局结构审核，必须建立
@@ -125,22 +132,22 @@ Reviewer 默认使用与 Writer 相同的读者历史边界。若作者明确要
 
 ## 5. 准确原文读取
 
-Exact Scene Read 使用稳定 Chapter ID 和 Scene ID。Application 验证：
+Exact Chapter Read 使用稳定 Volume ID 和 Chapter ID。Application 验证：
 
-- Scene 属于 Chapter；
-- Scene 位于 Session 历史边界之前；
-- Scene 已批准；
-- Scene 对应一个正式 manuscript Document；
-- Scene revision、Document revision 和磁盘 bytes 一致；
+- Chapter 属于 Volume；
+- Chapter 位于 Session 历史边界之前；
+- Chapter 已批准；
+- Chapter 对应一个正式 manuscript Document；
+- Chapter revision、Document revision 和磁盘 bytes 一致；
 - 文件是 UTF-8 Markdown。
 
 返回：
 
-- Chapter、Scene 和 Document ID；
+- Volume、Chapter 和 Document ID；
 - Document revision；
 - Story Time 和 Narrative Order；
 - POV 和地点；
-- 完整 Scene 正文；
+- 完整 Chapter 正文；
 - 当前 revision 的 SourceRef；
 - 明确的机械 warning。
 
@@ -152,8 +159,8 @@ Application 提供：
 
 - Entity 名称和 Alias 解析；
 - 绑定 Draft revision 的精确 Entity 候选；
-- Entity 在目标 Narrative Order 之前的 Scene/Chapter 出现线路；
-- 人物在目标 Scene entry/exit 的稀疏状态；
+- Entity 在目标 Narrative Order 之前的 Chapter/Volume 出现线路；
+- 人物在目标 Chapter entry/exit 的稀疏状态；
 - 人物知识与 objective 世界事实分离的 Assertion；
 - Event 列表与查找；
 - Event 链；
@@ -170,8 +177,8 @@ Writing Session 自动记录 Application 实际返回的来源：
 retrieved_source_id
 writing_session_id
 retrieval_kind
+volume_id
 chapter_id
-scene_id
 document_id
 document_revision
 retrieval_reason
@@ -185,10 +192,12 @@ retrieved_at
 
 ## 8. 摘要生成和失效
 
-- Scene Summary 只读取对应 Scene 生成和审核。
-- Chapter Summary 只聚合所属 Scene Summary。
-- 正文 revision 改变后，旧 Scene Summary 立即 stale。
-- 任一依赖 Scene Summary 缺失、stale 或 Digest 改变时，Chapter Summary stale。
+- Chapter Summary 只读取对应 Chapter 生成和审核。
+- Volume Summary 只聚合所属 Chapter Summary。
+- 正文 revision 改变后，旧 Chapter Summary 立即 stale。受控修订的 Publish Plan 同时准备
+  绑定新 revision 的 Chapter Summary、Volume Summary 和 Chapter Trace，并以旧导航对象的
+  digest 防止并发覆盖。
+- 任一依赖 Chapter Summary 缺失、stale 或 Digest 改变时，Volume Summary stale。
 - 查询结果明确返回 stale 状态。
 - stale 摘要只能帮助定位，不能作为当前事实。
 
@@ -198,7 +207,7 @@ retrieved_at
 
 - 全量 Narrative Beat；
 - 逐句证据链接；
-- 完整人物行为和心理索引；Scene Trace 只索引 Entity Mention 和出现位置；
+- 完整人物行为和心理索引；Chapter Trace 只索引 Entity Mention 和出现位置；
 - 自动全局因果图；
 - 完整证据图；
 - 语义充分性门槛。
@@ -209,7 +218,7 @@ Entity 线路索引是经过批准的有限候选召回增强，不扩展为全�
 ## 10. 查询可用性的验收
 
 - AI 能从 Session 起始环境开始创作；
-- AI 能发现 Chapter、Scene、Entity 和 Event 的稳定 ID；
+- AI 能发现 Volume、Chapter、Entity 和 Event 的稳定 ID；
 - 所有查询遵守同一目标历史边界；
 - 摘要缺失不会阻断原文；
 - 正文 revision 漂移会被拒绝；
