@@ -58,17 +58,24 @@ workspace, directly in the project top level, or inside formal `intent/`, `runs/
      read;
    - narrative distance and what each intended viewpoint notices, ignores, misunderstands, or
      refuses to explain;
+   - the focal character's allowed direct interiority, including bodily response, private thought,
+     memory, contradiction, and emotional aftereffect, while non-viewpoint minds stay closed;
    - familiar, precise diction as the baseline, with project-grounded exceptions for archaic,
      technical, dialectal, or world-specific language;
    - sentence-level clarity of actors, actions, referents, and causal turns under ordinary and
      high-pressure conditions;
-   - paragraph focal hierarchy and how prose space follows narrative importance;
+   - paragraph focal hierarchy and how prose space follows narrative, emotional, and relationship
+     importance;
+   - how setting, sensory detail, material life, and social atmosphere may shape viewpoint,
+     pressure, memory, relationship, and mood without becoming generic inventory;
    - relationship-specific dialogue tactics such as evasion, interruption, withholding, and
      misreading;
    - permitted silence, roughness, repetition, and incompleteness;
-   - prohibited generic literary defaults;
-   - author-provided or author-approved positive voice anchors and negative anchors with the
-     reason each is accepted or rejected.
+   - prohibited generic literary defaults without turning the Voice Contract into a blacklist;
+   - author-provided or author-approved positive voice anchors and sparing negative anchors with
+     the reason each is accepted or rejected. Make positive anchors the primary calibration
+     evidence, including examples of lived setting, focal interiority, and relationship subtext
+     where those belong to the project.
 
    When the author has not supplied prose anchors, prepare two or three short, labeled calibration
    candidates under `<root>/candidates/bootstrap/<bootstrap-id>/voice-calibration/`. Ask the author
@@ -76,6 +83,8 @@ workspace, directly in the project top level, or inside formal `intent/`, `runs/
    every calibration passage as a discussion artifact, not manuscript or approved Intent. Do not
    infer the opening voice from genre convention, generalized “human style,” or imitation of a
    named author, and do not leave placeholder voice rules for the first Writing Session to invent.
+   Do not select only efficient action-and-dialogue samples; include enough positive evidence for
+   the Writer to understand how the project handles emotion, interiority, place, and quiet moments.
    Reject a calibration anchor whose distinctiveness depends mainly on rare wording, tangled
    syntax, compressed logic, or unclear emphasis unless the author approves that exact reader
    effect for a project-specific reason.

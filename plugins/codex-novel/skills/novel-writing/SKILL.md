@@ -1,6 +1,6 @@
 ---
 name: novel-writing
-description: Run a project-bound Writing Session, recover approved history and authorial voice within its Narrative Order boundary, develop and confirm an author-visible causal Chapter plan, route material outline changes through Intent Revision, draft and review causally coherent and first-read-clear prose, present the exact ready Draft for author confirmation before any derived Entity or story-clue work, then resolve mentions and surface exact publication approval. Use when an author asks Codex to write, continue, insert, materially revise, or review a Chapter in a bootstrapped local Novel project.
+description: Run a project-bound Writing Session, recover approved history and authorial voice within its Narrative Order boundary, develop and confirm a concise author-visible Chapter plan, route material outline changes through Intent Revision, draft and review causally coherent, first-read-clear, emotionally alive, viewpoint-grounded prose, present the exact ready Draft for author confirmation before any derived Entity or story-clue work, then resolve mentions and surface exact publication approval. Use when an author asks Codex to write, continue, insert, materially revise, or review a Chapter in a bootstrapped local Novel project.
 ---
 
 # Novel Writing
@@ -121,15 +121,24 @@ versioned Chapter plan under `<root>/candidates/writing/<session-id>/planning/`.
 discussion artifact, not manuscript, approved Intent, Canon, Review, or publication approval. A
 review-only request that does not change prose may skip this planning gate.
 
-Keep the plan concise and author-visible. Do not create hidden subchapter or Scene cards, prescribe
-a fixed number of beats, or disguise a prose draft as planning. Include only:
+Keep the plan concise, author-visible, and materially shorter than the prose it enables. Capture the
+causal and emotional spine without prewriting every exchange, reaction, transition, or paragraph.
+Do not create hidden subchapter or Scene cards, prescribe a fixed number of beats, build exhaustive
+role tables, or disguise a prose implementation specification as planning. Include only:
 
 - the Chapter's function, approved-outline alignment, entry state, exit state, and mainline change;
-- each material character's immediate aim, relevant knowledge, mistaken assumption, and pressure;
-- the causal chain of material turns as observed fact → interpretation or choice → result → next
-  condition;
+- the immediate aims, knowledge limits, relationship pressure, and emotional movement that matter
+  to the Chapter;
+- the causal spine of material turns without scripting every local handoff;
 - the decisive choice, concrete cost, and forward condition created for the next Chapter;
+- any setting, bodily, sensory, or social condition that materially shapes the viewpoint's lived
+  experience;
 - whether the plan only refines Current Outline or changes approved Chapter or later-arc outcomes.
+
+Leave room for the Writer to discover local blocking, silence, memory, sensory emphasis, interior
+response, and relationship subtext while preserving the confirmed spine. A plan that specifies how
+every line must earn the next plot condition is too detailed; compress it before asking for
+confirmation.
 
 Show the exact plan revision to the author and invite correction, rejection, combination, or
 replacement. Continue revising the plan until its events, character behavior, information flow,
@@ -152,20 +161,26 @@ transitions that preserve the confirmed causal chain do not require another conf
 
 ## Governing writing standard
 
-### Highest creative gate: narrative intelligibility
+### Co-equal creative foundations
 
 After explicit author instructions, approved Intent, factual continuity, and structural identity,
-causal coherence and first-pass narrative clarity are the highest creative gate. A target reader
-must normally understand on one continuous read:
+causal coherence, first-pass narrative clarity, emotional truth, and lived viewpoint are co-equal
+creative foundations. A target reader must normally understand on one continuous read:
 
 1. what is happening now;
 2. why each character, limited to what that character knows and wants, responds this way;
 3. how that response, choice, or result creates the next material condition.
 
+The same reader should also experience what the viewpoint notices, avoids, remembers, physically
+feels, misunderstands, or cannot yet admit; how place and relationship pressure shape the moment;
+and what emotional change or residue remains after a material turn.
+
 If prose needs rereading, authorial explanation, abnormal character behavior, convenient
-coincidence, or an unsupported conclusion to connect those answers, repair the causality or
-description before improving voice, atmosphere, imagery, rhythm, novelty, elegance, length, or
-speed. Style cannot compensate for an unclear event or a broken transition.
+coincidence, or an unsupported conclusion to connect the action, repair the causality or
+description. If prose is technically clear but emotionally inert, set in an interchangeable void,
+or limited to reports of decisions, deepen it through viewpoint attention, body, memory,
+relationship, setting, and consequence. Style cannot compensate for broken causality, and plot
+efficiency cannot compensate for absent lived experience.
 
 Deliberate uncertainty may conceal an answer, but it must leave the live question, observed facts,
 available interpretations, and present stakes clear. Do not confuse mystery with missing causal
@@ -173,7 +188,7 @@ information.
 
 ### Project-specific voice
 
-Within that intelligibility gate, make the prose belong to the approved novel. Derive a compact
+Within these foundations, make the prose belong to the approved novel. Derive a compact
 Chapter voice brief from Writing Rules, Creative Brief, exact approved prose, Chapter position,
 viewpoint attention, relationship pressure, and lived knowledge. Decide what the viewpoint notices,
 ignores, misunderstands, or refuses to explain; how each speaker pursues an immediate aim; and where
@@ -191,34 +206,46 @@ permitted roughness, and positive and negative voice anchors. If it is missing, 
 `$novel-bootstrap` to calibrate and approve it before recommending the opening Chapter as `ready`.
 Infer choices from anchors without copying their sentences.
 
-### Draft from confirmed causality
+### Draft from causality and lived experience
 
-Generate prose from the confirmed plan's causal chain rather than decorating an event summary.
-Every material detail must help the viewpoint perceive, decide, act, misread, relate, or suffer a
-consequence. Do not add atmosphere, micro-actions, sensory inventory, explanation, or closure
-merely because a literary paragraph appears to need them.
+Generate prose from the confirmed plan's causal and emotional spine without converting the plan
+into a checklist. A material detail may help the viewpoint perceive, decide, act, misread, relate,
+remember, feel pressure, inhabit a specific place, or carry a consequence beyond the immediate
+action. Atmosphere, silence, sensory detail, bodily response, and interior thought are legitimate
+when they are selected by this viewpoint and make the present experience, relationship, or
+emotional movement more specific. Remove only detachable decoration, exhaustive inventory, and
+generic filler.
 
 When revising generic or unclear prose:
 
 1. preserve required facts, implications, and the confirmed exit state;
 2. identify the broken causal, behavioral, or reader-facing function;
-3. reduce the passage to necessary action, perception, dialogue, and consequence;
-4. rebuild it from viewpoint knowledge, immediate pressure, and relationship;
-5. restore only project-grounded rhythm or imagery;
+3. recover the necessary action, perception, dialogue, interior movement, and consequence;
+4. rebuild it from viewpoint knowledge, body, immediate pressure, setting, and relationship;
+5. restore project-grounded rhythm, imagery, silence, and emotional aftereffect;
 6. verify that the structure, not merely the vocabulary, changed.
 
 Prefer familiar, precise wording when it carries the meaning. Use archaic, technical, dialectal, or
 world-specific terms only when the approved voice or setting needs them, and make their meaning
 recoverable from nearby action or consequence. Keep actors, actions, objects, referents, and causal
-turns legible. Give each paragraph one dominant reader-facing job and allocate space by narrative
-importance: slow down for a material conflict, discovery, choice, or consequence; compress support,
-scenery, terminology, and already-known procedure.
+turns legible. Give each paragraph a clear focal center while allowing action, perception, memory,
+and emotion to coexist when they belong to the same lived moment. Allocate space by narrative
+importance: slow down for material conflict, discovery, choice, consequence, relationship change,
+or emotional aftershock; compress only support, scenery, terminology, and procedure that remain
+detachable from the viewpoint experience.
 
 For Chinese prose, avoid stacked abstract nouns, decorative four-character formulations, parallel
 mini-essays, and thesis → elaboration → thematic-summary scaffolding when direct action,
-perception, or dialogue carries the meaning. Do not restate an emotion or implication already clear
-from action or dialogue. Do not impose a universal sentence-length limit or flatten every approved
-voice into colloquial minimalism.
+perception, interior response, or dialogue carries the meaning. Do not merely label or restate an
+emotion already complete in action or dialogue; interiority may still complicate, resist, redirect,
+or deepen what the action appears to mean. Do not impose a universal sentence-length limit or
+flatten every approved voice into colloquial minimalism.
+
+Before drafting or reviewing Chinese prose in the current task, read
+[Chinese prose prohibited constructions](references/chinese-prose-prohibited-constructions.md) and
+[Scene-evidence calibration](references/scene-evidence-calibration.md). Apply every author-maintained
+prohibited construction to new or revised prose. Use all three labeled examples as a contrast set;
+let scene evidence carry feeling before interpretation, preserve functional plain diction, and learn structure without copying wording.
 
 ### Compact diagnostic tests
 
@@ -232,6 +259,18 @@ Use these as ordered literary judgments, not equal-weight mechanical scores:
   most without rereading, reconstruct the smallest affected passage.
 - **POV and dialogue:** If another viewpoint could observe the paragraph identically or speakers
   could exchange lines without damage, restore their distinct knowledge, aims, tactics, and history.
+- **Lived interiority:** If the focal character only performs correct actions without bodily,
+  emotional, mnemonic, or private response where the moment warrants one, restore the smallest
+  truthful layer of inner experience.
+- **Place and atmosphere:** If the setting could be replaced without affecting attention, pressure,
+  relationship, mood, or meaning, choose the few environmental details that make this moment
+  possible here and now.
+- **Emotional movement:** If the character enters and leaves a material turn emotionally unchanged
+  without an intentional reason, restore the accumulation, resistance, shift, or residue.
+- **Scene evidence and restraint:** If emotion depends on labels, explanatory paraphrase, or generic
+  images rather than observed action and pressure, rebuild the scene; if action already carries the
+  feeling, remove only the redundant explanation.
+- **Prohibited Chinese constructions:** Rebuild any violation around its actual action, perception, state, or contrast; do not evade the rule by relocating the same rhetorical shell.
 - **Rhetorical substitution:** If imagery, fragments, sensory detail, a polished explanation, or an
   aphoristic close masks rather than repairs a structural problem, remove it.
 
@@ -251,11 +290,13 @@ way rather than estimating from tokens. When approved Intent has no numeric budg
 one.
 
 Keep one continuous action unit and one explainable exit change. A short Chapter still needs a
-complete causal movement; a longer Chapter must earn its space through indivisible escalation, not
-scenery, procedural repetition, connective explanation, or thematic summary. Repeat an
+complete causal and emotional movement; a longer Chapter must earn its space through indivisible
+escalation or lived consequence, not detachable scenery, procedural repetition, connective
+explanation, or thematic summary. Repeat an
 investigation, verification, or rhetorical move only when its result, failure mode, relationship,
 or consequence materially changes. Compression must preserve action, perception, interruption,
-choice, and consequence rather than turn the Chapter into synopsis or telegraphic beats.
+choice, inner response, setting pressure, emotional aftereffect, and consequence rather than turn
+the Chapter into synopsis or telegraphic beats.
 
 Chapter length and movement remain author and AI literary judgments recorded in Review, not
 Application gates.
@@ -286,7 +327,8 @@ leaving contradictory long-term records.
 
 ### Ordered narrative review
 
-Review in this order. A later strength cannot compensate for an earlier failure:
+Review all foundations before recommending `ready`. Use this order to locate causes, but do not
+treat later literary dimensions as optional polish:
 
 1. **Plan and continuity:** The Draft preserves the confirmed plan, approved Intent, exact history,
    structural identity, and required exit state.
@@ -297,17 +339,26 @@ Review in this order. A later strength cannot compensate for an earlier failure:
 3. **First-pass narrative clarity:** A cold reader using only the Draft can tell what happened, who
    acted, why the reaction is plausible, how the result creates the next condition, what a referent
    points to, and which detail matters most without syntactic rereading.
-4. **Human behavior and viewpoint:** Conclusions stay within character knowledge; speech and action
-   fit role, relationship, fear, habit, and current interest; the viewpoint selects rather than
-   inventories details.
-5. **Project-specific voice:** Diction, dialogue, omission, roughness, and rhythm follow approved
+4. **Human behavior and lived viewpoint:** Conclusions stay within character knowledge; speech and
+   action fit role, relationship, fear, habit, and current interest; the focal character has
+   sufficient bodily, emotional, mnemonic, and private experience for the narrative distance.
+   Non-viewpoint characters remain observable from the outside.
+5. **Emotional and relationship movement:** Pressure accumulates, choices alter or expose feeling,
+   and material turns leave a believable shift, resistance, or residue instead of only advancing
+   logistics.
+6. **Place and atmosphere:** Selected setting, sensory, social, and material details make the scene
+   specific and influence attention, pressure, mood, or relationship without becoming inventory.
+7. **Project-specific voice:** Diction, dialogue, omission, roughness, and rhythm follow approved
    evidence instead of generic literary completion.
-6. **AI-pattern regression:** A revision repairs the structural cause instead of exchanging one
-   conspicuous pattern for another.
+8. **AI-pattern regression:** Scene evidence carries meaning before interpretation, every
+   author-maintained Chinese construction constraint is satisfied, and a revision repairs the
+   structural cause instead of exchanging one conspicuous pattern for another.
 
 Do not recommend `ready` when the mainline change is only thematic, opposition stays passive, a
 central choice has no concrete cost, the ending can move unchanged to another Chapter, the
-confirmed plan was materially bypassed, or causal coherence or first-pass clarity fails.
+confirmed plan was materially bypassed, causal coherence or first-pass clarity fails, the focal
+experience remains materially empty, or the Chapter reaches its exit without the intended
+emotional and relationship movement.
 
 For each material failure, cite the shortest exact excerpt, state the probable reader
 misunderstanding, identify the causal, behavioral, focal, or voice cause, name protected material,
@@ -315,20 +366,11 @@ and give the smallest reconstruction goal. Prefer diagnosis over replacement pro
 example prose only when the author explicitly asks or the repair would otherwise remain ambiguous;
 mark it as a non-authoritative candidate.
 
-State all of the following in the Review conclusion:
-
-- `confirmed chapter plan: <revision>`;
-- `causal-coherence check: passed` or `causal-coherence check: failed`;
-- `first-pass narrative-clarity check: passed` or
-  `first-pass narrative-clarity check: failed`;
-- `human-behavior plausibility check: passed` or
-  `human-behavior plausibility check: failed`;
-- `focal-hierarchy check: passed` or `focal-hierarchy check: failed`;
-- `lexical-accessibility check: passed` or `lexical-accessibility check: failed`;
-- `authorial-prose integrity check: passed` or
-  `authorial-prose integrity check: failed`;
-- `AI-like prose regression check: passed` or
-  `AI-like prose regression check: failed`.
+Keep the Review conclusion compact. State the exact confirmed Chapter plan revision, the
+recommendation, concrete material findings, and unresolved uncertainty. Address causality,
+first-pass clarity, lived viewpoint, emotional movement, place, and project voice in the findings
+that actually matter to this Draft. Do not emit a ceremonial battery of `passed` labels without
+evidence or let checklist completion substitute for literary judgment.
 
 For a failed clarity check, preserve intended uncertainty but identify what the reader should have
 understood without rereading. For a failed causal or behavior check, do not patch the gap with
@@ -338,23 +380,29 @@ explanatory narration; return to the Chapter plan when the confirmed chain itsel
 
 Act primarily as a diagnostic role, not a second prose generator. Preserve project-grounded
 silence, ambiguity, bluntness, unevenness, and character-limited expression. Do not automatically
-add atmosphere, sensory detail, polished metaphor, balanced clauses, fashionable fragments,
-explicit emotion, thematic summary, aphoristic closure, or more articulate dialogue.
+add generic atmosphere, counted-time amplification, stock sentimental memory, sensory inventory,
+polished metaphor, balanced exposition, fashionable fragments, labeled emotion, redundant
+interpretation, thematic summary, aphoristic closure, or more articulate dialogue.
+Absence is also a material failure when the focal character has no inner life, the setting is an
+interchangeable void, relationships carry no felt pressure, or choices leave no emotional residue.
+In those cases, recommend targeted reconstruction through viewpoint-grounded body, thought,
+memory, environment, silence, or subtext rather than decorative expansion.
 
 After every revision, review the exact new Draft. Check whether the causal or clarity defect was
 repaired, a generic pattern was merely exchanged for another, unsupported decoration appeared, or
 effective authorial irregularity was normalized. Judge AI-like prose by causality, viewpoint,
-relationship, selection, and consequence, not by a phrase blacklist.
+relationship, selection, and consequence, not solely by a phrase blacklist. Enforce the separate
+author-maintained prohibited-construction list exactly.
 
 For a first Chapter with no earlier approved manuscript prose, state
 `opening voice basis: established` or `opening voice basis: missing` in the Review conclusion.
 `established` requires the approved Voice Contract and its author-approved anchors; genre
 convention, Writer rationale, local period detail, and polished specificity do not substitute.
 
-Do not recommend `ready` while a material generic completion, rhetorical substitution,
-Reviewer-induced style regression, or missing opening voice basis remains. Treat an AI-detector
-result only as a noisy external observation, never as the writing objective, Application gate, or
-substitute for literary judgment.
+Do not recommend `ready` while newly drafted or revised prose contains a prohibited Chinese
+construction, or while a material generic completion, rhetorical substitution, emotionally empty
+focal experience, interchangeable setting, Reviewer-induced style regression, or missing opening
+voice basis remains. Treat an AI-detector result only as a noisy external observation, never as the writing objective, Application gate, or substitute for literary judgment.
 
 ## Exact Draft author confirmation
 

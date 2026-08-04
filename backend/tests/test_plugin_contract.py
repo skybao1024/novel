@@ -82,12 +82,12 @@ def test_plugin_manifest_and_repo_marketplace_are_installable_contracts() -> Non
     assert "surfaces exact publication approval" in long_description
     assert "backfills missing historical Traces" in long_description
     assert "compatib" not in long_description.lower()
-    assert "load the selected project contract in place" in default_prompt
-    assert "one complete Chapter" in default_prompt
-    assert "confirm a causal plan before writing or revising" in default_prompt
-    assert "causal coherence and first-pass narrative clarity" in default_prompt
-    assert "exact ready Draft for author confirmation before derived clue work" in default_prompt
-    assert "surface exact approval" in default_prompt
+    assert "concise plan" in default_prompt
+    assert "emotionally alive viewpoint prose" in default_prompt
+    assert "exact approval boundaries" in default_prompt
+    assert len(default_prompt) <= 128
+    assert "causal-and-emotional plan" in long_description
+    assert "emotional truth, lived viewpoint, meaningful setting" in long_description
     assert "mcpServers" not in manifest
     assert "apps" not in manifest
     assert "hooks" not in manifest
@@ -159,6 +159,8 @@ def test_plugin_exposes_creation_loop_and_ai_first_memory_skills() -> None:
         expected_entries = {"SKILL.md", "agents"}
         if skill_name == "novel-bootstrap":
             expected_entries.update({"assets", "scripts"})
+        if skill_name == "novel-writing":
+            expected_entries.add("references")
         assert {path.name for path in skill_root.iterdir()} == expected_entries
         metadata = (skill_root / "agents" / "openai.yaml").read_text(encoding="utf-8")
         assert f"${skill_name}" in metadata
@@ -180,7 +182,12 @@ def test_bootstrap_requires_author_approved_opening_voice_calibration() -> None:
     assert "what must remain clear on one continuous first read" in normalized_content
     assert "familiar, precise diction as the baseline" in normalized_content
     assert "paragraph focal hierarchy" in normalized_content
-    assert "author-approved positive voice anchors and negative anchors" in normalized_content
+    assert "focal character's allowed direct interiority" in normalized_content
+    assert "bodily response, private thought, memory, contradiction" in normalized_content
+    assert "setting, sensory detail, material life, and social atmosphere" in normalized_content
+    assert "positive voice anchors and sparing negative anchors" in normalized_content
+    assert "Make positive anchors the primary calibration evidence" in normalized_content
+    assert "lived setting, focal interiority, and relationship subtext" in normalized_content
     assert "voice-calibration/" in normalized_content
     assert "select, revise, combine, or reject them" in normalized_content
     assert "discussion artifact, not manuscript or approved Intent" in normalized_content
@@ -188,12 +195,14 @@ def test_bootstrap_requires_author_approved_opening_voice_calibration() -> None:
         normalized_content
     )
     assert "do not leave placeholder voice rules" in normalized_content
+    assert "Do not select only efficient action-and-dialogue samples" in normalized_content
     assert "rare wording, tangled syntax, compressed logic, or unclear emphasis" in (
         normalized_content
     )
     assert "$novel-bootstrap" in metadata
-    assert "calibrate an author-approved opening Voice Contract" in metadata
-    assert "first-pass readability and focal-hierarchy baseline" in metadata
+    assert "calibrate an author-approved Voice Contract" in metadata
+    assert "lived viewpoint, emotional movement, meaningful setting" in metadata
+    assert "positive prose anchors" in metadata
     assert "prepare its exact Intent Diff for approval" in metadata
 
 
@@ -239,9 +248,10 @@ def test_writing_skill_requires_exact_predecessor_chapter_before_drafting() -> N
     assert "Never choose the first, unique, nearest, or fuzzy string hit" in normalized_content
     assert "partial-context sub-agent report cannot substitute" in normalized_content
     assert "recover exact history" in metadata
-    assert "author-visible causal Chapter plan" in metadata
-    assert "route material outline changes through approved Intent Revision" in metadata
-    assert "resolve Entity mentions" in metadata
+    assert "recover exact history" in metadata
+    assert "concise causal-and-emotional Chapter plan" in metadata
+    assert "emotionally alive viewpoint prose with meaningful setting" in metadata
+    assert "separate confirmation and publication boundaries" in metadata
 
 
 def test_writing_skill_disambiguates_chapter_insertion_boundaries() -> None:
@@ -265,26 +275,23 @@ def test_writing_skill_disambiguates_chapter_insertion_boundaries() -> None:
     assert "Do not proceed with a Session whose saved boundary differs" in normalized_content
 
 
-def test_writing_skill_prioritizes_causal_coherence_and_narrative_clarity() -> None:
+def test_writing_skill_balances_clarity_with_lived_emotional_prose() -> None:
     skill_root = PLUGIN_ROOT / "skills" / "novel-writing"
     content = (skill_root / "SKILL.md").read_text(encoding="utf-8")
     normalized_content = " ".join(content.split())
     metadata = (skill_root / "agents" / "openai.yaml").read_text(encoding="utf-8")
 
     assert "## Governing writing standard" in content
-    assert "### Highest creative gate: narrative intelligibility" in content
-    assert (
-        "causal coherence and first-pass narrative clarity are the highest creative gate"
-        in normalized_content
-    )
+    assert "### Co-equal creative foundations" in content
+    assert "causal coherence, first-pass narrative clarity, emotional truth" in normalized_content
+    assert "lived viewpoint are co-equal creative foundations" in normalized_content
     assert "what is happening now" in normalized_content
     assert (
         "why each character, limited to what that character knows and wants" in normalized_content
     )
     assert "creates the next material condition" in normalized_content
-    assert (
-        "Style cannot compensate for an unclear event or a broken transition" in normalized_content
-    )
+    assert "emotionally inert, set in an interchangeable void" in normalized_content
+    assert "plot efficiency cannot compensate for absent lived experience" in normalized_content
     assert "mystery with missing causal information" in normalized_content
 
     assert "### Project-specific voice" in content
@@ -293,12 +300,18 @@ def test_writing_skill_prioritizes_causal_coherence_and_narrative_clarity() -> N
     assert "author-approved Voice Contract from Writing Rules" in normalized_content
     assert "$novel-bootstrap" in normalized_content
 
-    assert "### Draft from confirmed causality" in content
-    assert "confirmed plan's causal chain" in normalized_content
+    assert "### Draft from causality and lived experience" in content
+    assert "confirmed plan's causal and emotional spine" in normalized_content
+    assert "without converting the plan into a checklist" in normalized_content
+    assert "Atmosphere, silence, sensory detail, bodily response, and interior thought" in (
+        normalized_content
+    )
+    assert "Remove only detachable decoration" in normalized_content
     assert "structure, not merely the vocabulary, changed" in normalized_content
     assert "Prefer familiar, precise wording when it carries the meaning" in normalized_content
-    assert "Give each paragraph one dominant reader-facing job" in normalized_content
-    assert "allocate space by narrative importance" in normalized_content
+    assert "Give each paragraph a clear focal center" in normalized_content
+    assert "allowing action, perception, memory, and emotion to coexist" in normalized_content
+    assert "slow down for material conflict" in normalized_content
     assert "thesis → elaboration → thematic-summary scaffolding" in normalized_content
     assert "Do not impose a universal sentence-length limit" in normalized_content
 
@@ -308,50 +321,117 @@ def test_writing_skill_prioritizes_causal_coherence_and_narrative_clarity() -> N
         "**Knowledge and behavior:**",
         "**First read:**",
         "**POV and dialogue:**",
+        "**Lived interiority:**",
+        "**Place and atmosphere:**",
+        "**Emotional movement:**",
         "**Rhetorical substitution:**",
     ):
         assert test_name in content
 
     assert "### Ordered narrative review" in content
-    assert "A later strength cannot compensate for an earlier failure" in normalized_content
+    assert "do not treat later literary dimensions as optional polish" in normalized_content
     for review_name in (
         "**Plan and continuity:**",
         "**Causal coherence:**",
         "**First-pass narrative clarity:**",
-        "**Human behavior and viewpoint:**",
+        "**Human behavior and lived viewpoint:**",
+        "**Emotional and relationship movement:**",
+        "**Place and atmosphere:**",
         "**Project-specific voice:**",
         "**AI-pattern regression:**",
     ):
         assert review_name in content
-    assert "`confirmed chapter plan: <revision>`" in normalized_content
-    assert "`causal-coherence check: passed`" in normalized_content
-    assert "`causal-coherence check: failed`" in normalized_content
-    assert "`first-pass narrative-clarity check: passed`" in normalized_content
-    assert "`first-pass narrative-clarity check: failed`" in normalized_content
-    assert "`human-behavior plausibility check: passed`" in normalized_content
-    assert "`human-behavior plausibility check: failed`" in normalized_content
-    assert "`focal-hierarchy check: passed`" in normalized_content
-    assert "`focal-hierarchy check: failed`" in normalized_content
-    assert "`lexical-accessibility check: passed`" in normalized_content
-    assert "`lexical-accessibility check: failed`" in normalized_content
+    assert "Keep the Review conclusion compact" in normalized_content
+    assert "Do not emit a ceremonial battery of `passed` labels" in normalized_content
+    assert "let checklist completion substitute for literary judgment" in normalized_content
 
     assert "### Reviewer restraint and AI-pattern review" in content
     assert "diagnostic role, not a second prose generator" in normalized_content
+    assert "Absence is also a material failure" in normalized_content
+    assert "focal character has no inner life" in normalized_content
+    assert "setting is an interchangeable void" in normalized_content
+    assert "viewpoint-grounded body, thought, memory, environment" in normalized_content
     assert "a generic pattern was merely exchanged for another" in normalized_content
     assert "Judge AI-like prose by causality, viewpoint" in normalized_content
     assert "`opening voice basis: established`" in normalized_content
     assert "`opening voice basis: missing`" in normalized_content
-    assert "`authorial-prose integrity check: passed`" in normalized_content
-    assert "`authorial-prose integrity check: failed`" in normalized_content
-    assert "`AI-like prose regression check: passed`" in normalized_content
-    assert "`AI-like prose regression check: failed`" in normalized_content
     assert "noisy external observation" in normalized_content
     assert "never as the writing objective" in normalized_content
 
-    assert "author-visible causal Chapter plan" in metadata
-    assert "author confirms the aligned plan" in metadata
-    assert "causal coherence and first-pass narrative clarity" in metadata
-    assert "preserve project-specific voice" in metadata
+    assert "concise causal-and-emotional Chapter plan" in metadata
+    assert "clear and emotionally alive viewpoint prose" in metadata
+    assert "meaningful setting" in metadata
+
+
+def test_writing_skill_prefers_scene_evidence_over_rhetorical_expansion() -> None:
+    skill_root = PLUGIN_ROOT / "skills" / "novel-writing"
+    content = (skill_root / "SKILL.md").read_text(encoding="utf-8")
+    normalized_content = " ".join(content.split())
+    calibration_path = skill_root / "references" / "scene-evidence-calibration.md"
+    calibration = calibration_path.read_text(encoding="utf-8")
+    normalized_calibration = " ".join(calibration.split())
+
+    assert "[Scene-evidence calibration](references/scene-evidence-calibration.md)" in content
+    assert "Before drafting or reviewing Chinese prose in the current task" in normalized_content
+    assert "Use all three labeled examples as a contrast set" in normalized_content
+    assert "learn structure without copying wording" in normalized_content
+
+    assert "## Example 1 — reject: confirmed AI" in calibration
+    assert "足足有七百多个日夜" in calibration
+    assert "balanced “long/not long, short/not short” exposition" in normalized_calibration
+    assert "## Example 2 — reject or rebuild: suspected AI" in calibration
+    assert "幼时我骑在他的肩头" in calibration
+    assert "generic childhood montage" in normalized_calibration
+    assert "## Example 3 — positive calibration: human-authored" in calibration
+    assert "他用两手攀着上面，两脚再向上缩" in calibration
+    assert "exact spatial problem and a visible action sequence" in normalized_calibration
+    assert "Read all three examples before drafting" in normalized_calibration
+    assert "not detector ground truth" in normalized_calibration
+    assert "Do not copy the father, railway, oranges" in normalized_calibration
+
+    assert "symmetrical exposition" in normalized_calibration
+    assert "counted-time amplification" in normalized_calibration
+    assert "stock weather" in normalized_calibration.lower()
+    assert "approved history or a present trigger makes it specific" in normalized_calibration
+    assert "functional repetition" in normalized_calibration
+    assert "**Scene evidence and restraint:**" in content
+    assert "remove only the redundant explanation" in normalized_content
+    assert "stock sentimental memory" in normalized_content
+
+
+def test_writing_skill_enforces_author_prohibited_chinese_constructions() -> None:
+    skill_root = PLUGIN_ROOT / "skills" / "novel-writing"
+    content = (skill_root / "SKILL.md").read_text(encoding="utf-8")
+    normalized_content = " ".join(content.split())
+    constraints_path = skill_root / "references" / "chinese-prose-prohibited-constructions.md"
+    constraints = constraints_path.read_text(encoding="utf-8")
+    normalized_constraints = " ".join(constraints.split())
+
+    assert (
+        "[Chinese prose prohibited constructions]"
+        "(references/chinese-prose-prohibited-constructions.md)" in content
+    )
+    assert "Apply every author-maintained prohibited construction" in normalized_content
+    assert "**Prohibited Chinese constructions:**" in content
+    assert "author-maintained prohibited-construction list exactly" in normalized_content
+    assert "Do not recommend `ready` while newly drafted or revised prose contains" in (
+        normalized_content
+    )
+
+    assert "## 1. Sentence-opening `……的时候，……`" in constraints
+    assert "太阳落山的时候，他们来到了山脚下" in constraints
+    assert "他们在太阳落山的时候来到了山脚下" in constraints
+    assert "Begin with the actor, action, change" in normalized_constraints
+    assert "## 2. Paired `没有……只……` contrast" in constraints
+    assert "`没有 A，只/只是/只有 B`" in constraints
+    assert "`只/只是/只有 B，没有 A`" in constraints
+    assert "屋里没有灯，只有窗外的月光" in constraints
+    assert "他只是低头赶路，没有回头" in constraints
+    assert "standalone `只`, `只是`, `只有`, or `没有` is not automatically" in (
+        normalized_constraints
+    )
+    assert "swapping the two halves" in normalized_constraints
+    assert "splitting them into adjacent sentences" in normalized_constraints
 
 
 def test_writing_skill_confirms_plans_and_controls_chapter_scope() -> None:
@@ -364,10 +444,13 @@ def test_writing_skill_confirms_plans_and_controls_chapter_scope() -> None:
     assert "## Chapter plan and author confirmation" in content
     assert "author-visible" in normalized_content
     assert "discussion artifact, not manuscript, approved Intent, Canon" in normalized_content
+    assert "materially shorter than the prose it enables" in normalized_content
     assert "Do not create hidden subchapter or Scene cards" in normalized_content
-    assert (
-        "observed fact → interpretation or choice → result → next condition" in normalized_content
-    )
+    assert "build exhaustive role tables" in normalized_content
+    assert "disguise a prose implementation specification as planning" in normalized_content
+    assert "causal and emotional spine" in normalized_content
+    assert "Leave room for the Writer to discover local blocking" in normalized_content
+    assert "sensory emphasis, interior response, and relationship subtext" in normalized_content
     assert "Show the exact plan revision to the author" in normalized_content
     assert "changes an approved Chapter turn, sequence, decisive choice" in normalized_content
     assert "use `$novel-bootstrap` to prepare, inspect, approve, and apply an Intent Revision" in (
@@ -392,11 +475,11 @@ def test_writing_skill_confirms_plans_and_controls_chapter_scope() -> None:
     assert "Compression must preserve action, perception" in normalized_content
     assert "not Application gates" in normalized_content
 
-    assert "route material outline changes through approved Intent Revision" in metadata
-    assert "draft only after the author confirms the aligned plan" in metadata
-    assert "complete Chapters" in manifest
-    assert "author-visible causal plan" in manifest
-    assert "causal coherence and first-pass narrative clarity" in manifest
+    assert "concise causal-and-emotional Chapter plan" in metadata
+    assert "separate confirmation and publication boundaries" in metadata
+    assert "emotionally alive Chapters" in manifest
+    assert "causal-and-emotional plan" in manifest
+    assert "emotional truth, lived viewpoint, meaningful setting" in manifest
 
 
 def test_writing_and_publish_skills_control_approved_chapter_revisions() -> None:
