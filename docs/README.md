@@ -13,6 +13,7 @@
 | [导航记忆与查询](./04-memory-and-query.md) | 创作起始信息、摘要导航、准确原文、查询边界和来源记录 |
 | [本地运行与多项目管理](./05-local-runtime-and-projects.md) | Project Catalog、CLI 协议、锁、恢复和本地运行规则 |
 | [初始化、写作与发布](./06-creation-and-publishing.md) | Bootstrap、Writing Session、Draft、Review、批准和发布事务 |
+| [桌面端与 Agent Runtime 开发计划](./07-desktop-agent-runtime-development-plan.md) | 桌面客户端、Agent 安装授权、Runtime 切换和分阶段实施计划 |
 
 ## 统一目标
 
